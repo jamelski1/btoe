@@ -64,7 +64,7 @@ class GitHubMiner:
 
         # Check repository age
         created = repo.created_at
-        age_years = (datetime.now() - created).days / 365.25
+        age_years = (datetime.now(tz=created.tzinfo) - created).days / 365.25
 
         # Check license
         license_info = repo.license
