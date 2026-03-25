@@ -35,17 +35,17 @@ btoe/
 
 ## Setup
 
-```bash
+```powershell
 # 1. Create virtual environment
 python -m venv .venv
-source .venv/bin/activate
+.venv\Scripts\Activate.ps1
 
 # 2. Install dependencies
 pip install -r requirements.txt
 
 # 3. Configure environment
-cp .env.example .env
-# Edit .env and add your GitHub token
+Copy-Item .env.example .env
+# Edit .env and add your GitHub token (e.g. notepad .env)
 
 # 4. Run pipeline steps
 python -m src.pipeline --step validate   # Validate target repos
@@ -55,6 +55,8 @@ python -m src.pipeline --step train      # Train Models A, B, C
 python -m src.pipeline --step analyze    # SHAP + error analysis
 python -m src.pipeline --step all        # Run everything
 ```
+
+> **Note (Windows):** If you get an execution policy error when activating the venv, run `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned` first. PyDriller requires `git` on your PATH — install [Git for Windows](https://git-scm.com/download/win) if needed.
 
 ## Models
 
