@@ -54,8 +54,8 @@ class GitHubMiner:
         """
         repo = self.gh.get_repo(f"{owner}/{name}")
 
-        # Count closed issues with linked PRs (sample-based estimate)
-        closed_issues = repo.get_issues(state="closed", sort="updated", direction="desc")
+        # Count closed issues (use search API for accurate totalCount)
+        closed_issues = self.gh.search_issues(f"repo:{owner}/{name} is:issue is:closed")
         total_closed = closed_issues.totalCount
 
         # Check contributor count
