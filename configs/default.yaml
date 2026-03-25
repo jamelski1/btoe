@@ -1,0 +1,84 @@
+# SE3M Replication Study Configuration
+
+# Target repositories for mining
+repositories:
+  - owner: apache
+    name: spark
+  - owner: microsoft
+    name: vscode
+  - owner: kubernetes
+    name: kubernetes
+
+# Inclusion/exclusion criteria for issue-PR pairs
+filtering:
+  # Minimum requirements for repository selection
+  min_closed_issues_with_prs: 1000
+  min_years_active: 3
+  min_contributors: 10
+
+  # Issue-PR pair filtering
+  min_description_length: 50        # characters
+  max_duration_days: 365             # exclude outlier long-running issues
+  min_duration_hours: 1              # exclude trivially fast closures
+  require_linked_pr: true
+  require_merged_pr: true
+  exclude_labels:                    # labels indicating non-feature work
+    - "duplicate"
+    - "wontfix"
+    - "invalid"
+    - "question"
+
+  # Target sample size per project
+  target_sample_size: 1500
+
+# NLP feature extraction
+nlp:
+  model_name: "microsoft/codebert-base"
+  embedding_dim: 768
+  max_token_length: 512
+  batch_size: 32
+
+# Repository feature extraction
+repo_features:
+  churn_lookback_days: 90            # window for code churn calculation
+  coupling_min_support: 3            # minimum co-changes for coupling
+  tfidf_max_features: 5000           # for file-requirement mapping
+
+# Modeling
+modeling:
+  random_seed: 42
+  cv_folds: 5
+  test_size: 0.2
+
+  # XGBoost defaults (will be tuned via Bayesian optimization)
+  xgboost:
+    n_estimators: 500
+    max_depth: 6
+    learning_rate: 0.1
+    subsample: 0.8
+    colsample_bytree: 0.8
+    reg_alpha: 0.1
+    reg_lambda: 1.0
+
+  # Bayesian optimization
+  bayes_opt:
+    n_calls: 50
+    n_random_starts: 10
+
+# Evaluation metrics
+metrics:
+  - mae        # Mean Absolute Error
+  - mdae       # Median Absolute Error
+  - mre        # Mean Relative Error
+  - pred_25    # Prediction at 25%
+  - pred_50    # Prediction at 50%
+  - r2         # R-squared
+  - sa         # Standardized Accuracy
+
+# Statistical tests
+statistics:
+  wilcoxon_alpha: 0.05
+  cliff_delta_thresholds:
+    negligible: 0.147
+    small: 0.33
+    medium: 0.474
