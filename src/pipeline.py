@@ -86,11 +86,17 @@ def step_collect(config: dict):
     df = miner.pairs_to_dataframe(all_pairs)
 
     # Save final combined dataset
-    df.to_parquet(out_path, index=False)
+    try:
+        df.to_parquet(out_path, index=False)
+        saved_path = out_path
+    except ImportError:
+        saved_path = out_path.with_suffix(".csv")
+        df.to_csv(saved_path, index=False)
+        print("  (Saved as CSV — install pyarrow for parquet support)")
 
     print(f"\n{'='*60}")
     print(f"Collection complete: {len(df)} total issue-PR pairs")
-    print(f"Saved to {out_path}")
+    print(f"Saved to {saved_path}")
     print(f"{'='*60}")
     if len(df) > 0:
         logger.info(f"Duration stats:\n{df['duration_hours'].describe()}")

@@ -178,9 +178,14 @@ class GitHubMiner:
         save_path = Path(save_path)
         save_path.parent.mkdir(parents=True, exist_ok=True)
         df = self.pairs_to_dataframe(pairs)
-        incremental_path = save_path.parent / f"{owner}_{name}_partial.parquet"
-        df.to_parquet(incremental_path, index=False)
-        print(f"  💾 Saved {len(pairs)} pairs to {incremental_path}")
+        try:
+            incremental_path = save_path.parent / f"{owner}_{name}_partial.parquet"
+            df.to_parquet(incremental_path, index=False)
+            print(f"  Saved {len(pairs)} pairs to {incremental_path}")
+        except ImportError:
+            incremental_path = save_path.parent / f"{owner}_{name}_partial.csv"
+            df.to_csv(incremental_path, index=False)
+            print(f"  Saved {len(pairs)} pairs to {incremental_path} (CSV fallback)")
 
     def _try_extract_pair(self, repo, issue) -> IssuePRPair | None:
         """Try to extract a linked issue-PR pair from an issue."""
