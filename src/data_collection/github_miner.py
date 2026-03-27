@@ -97,7 +97,8 @@ class GitHubMiner:
             logger.warning(f"Rate limit hit. Waiting {wait_seconds:.0f}s until reset.")
             time.sleep(wait_seconds)
 
-    def mine_issue_pr_pairs(self, owner: str, name: str, max_pairs: int = None) -> list[IssuePRPair]:
+    def mine_issue_pr_pairs(self, owner: str, name: str, max_pairs: int = None,
+                            save_path=None) -> list[IssuePRPair]:
         """Mine linked issue-PR pairs from a repository.
 
         Identifies issues that reference merged PRs through:
@@ -108,8 +109,14 @@ class GitHubMiner:
         max_pairs = max_pairs or self.filter_cfg["target_sample_size"]
         repo = self.gh.get_repo(f"{owner}/{name}")
         pairs = []
+        issues_checked = 0
+        issues_skipped_pr = 0
+        issues_no_link = 0
+        issues_filtered = 0
 
-        logger.info(f"Mining issue-PR pairs from {owner}/{name} (target: {max_pairs})")
+        print(f"\n{'='*60}")
+        print(f"Mining {owner}/{name} — target: {max_pairs} pairs")
+        print(f"{'='*60}")
 
         # Get closed issues, sorted by most recently updated
         issues = repo.get_issues(state="closed", sort="updated", direction="desc")
@@ -118,21 +125,62 @@ class GitHubMiner:
             if len(pairs) >= max_pairs:
                 break
 
+            issues_checked += 1
+
+            # Progress every 25 issues checked
+            if issues_checked % 25 == 0:
+                print(f"  [{owner}/{name}] Checked {issues_checked} issues → {len(pairs)} pairs found so far")
+
             try:
                 pair = self._try_extract_pair(repo, issue)
-                if pair and self._passes_filters(pair):
+                if pair is None:
+                    if issue.pull_request is not None:
+                        issues_skipped_pr += 1
+                    else:
+                        issues_no_link += 1
+                    continue
+
+                if self._passes_filters(pair):
                     pairs.append(pair)
-                    if len(pairs) % 50 == 0:
-                        logger.info(f"Collected {len(pairs)}/{max_pairs} pairs")
+                    print(f"  ✓ Issue #{issue.number} → PR #{pair.pr_number} ({pair.duration_hours:.1f}h) [{len(pairs)}/{max_pairs}]")
+
+                    # Incremental save every 25 pairs
+                    if save_path and len(pairs) % 25 == 0:
+                        self._incremental_save(pairs, save_path, owner, name)
+                else:
+                    issues_filtered += 1
 
             except RateLimitExceededException:
+                print(f"  ⏳ Rate limit hit after {issues_checked} issues, waiting for reset...")
                 self._handle_rate_limit()
+                print(f"  ▶ Resuming...")
             except Exception as e:
                 logger.warning(f"Error processing issue #{issue.number}: {e}")
                 continue
 
+        print(f"\n  Summary for {owner}/{name}:")
+        print(f"    Issues checked:    {issues_checked}")
+        print(f"    Skipped (is PR):   {issues_skipped_pr}")
+        print(f"    No linked PR:      {issues_no_link}")
+        print(f"    Filtered out:      {issues_filtered}")
+        print(f"    Valid pairs:       {len(pairs)}")
+
+        # Final incremental save
+        if save_path and pairs:
+            self._incremental_save(pairs, save_path, owner, name)
+
         logger.info(f"Mined {len(pairs)} valid issue-PR pairs from {owner}/{name}")
         return pairs
+
+    def _incremental_save(self, pairs, save_path, owner, name):
+        """Save current pairs to disk incrementally."""
+        from pathlib import Path
+        save_path = Path(save_path)
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        df = self.pairs_to_dataframe(pairs)
+        incremental_path = save_path.parent / f"{owner}_{name}_partial.parquet"
+        df.to_parquet(incremental_path, index=False)
+        print(f"  💾 Saved {len(pairs)} pairs to {incremental_path}")
 
     def _try_extract_pair(self, repo, issue) -> IssuePRPair | None:
         """Try to extract a linked issue-PR pair from an issue."""

@@ -59,19 +59,41 @@ def step_collect(config: dict):
     miner = GitHubMiner(config)
     all_pairs = []
 
+    out_path = get_data_dir() / "raw" / "issue_pr_pairs.parquet"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Only collect from repos that passed validation
+    validation_path = get_data_dir() / "repo_validation.json"
+    valid_repos = set()
+    if validation_path.exists():
+        import json
+        with open(validation_path) as f:
+            for r in json.load(f):
+                if r.get("passes_all"):
+                    valid_repos.add(r["repo"])
+
     for repo in config["repositories"]:
-        pairs = miner.mine_issue_pr_pairs(repo["owner"], repo["name"])
+        repo_full = f"{repo['owner']}/{repo['name']}"
+        if valid_repos and repo_full not in valid_repos:
+            print(f"Skipping {repo_full} (did not pass validation)")
+            continue
+
+        pairs = miner.mine_issue_pr_pairs(
+            repo["owner"], repo["name"], save_path=out_path
+        )
         all_pairs.extend(pairs)
 
     df = miner.pairs_to_dataframe(all_pairs)
 
-    # Save raw dataset
-    out_path = get_data_dir() / "raw" / "issue_pr_pairs.parquet"
-    out_path.parent.mkdir(parents=True, exist_ok=True)
+    # Save final combined dataset
     df.to_parquet(out_path, index=False)
 
-    logger.info(f"Collected {len(df)} issue-PR pairs, saved to {out_path}")
-    logger.info(f"Duration stats:\n{df['duration_hours'].describe()}")
+    print(f"\n{'='*60}")
+    print(f"Collection complete: {len(df)} total issue-PR pairs")
+    print(f"Saved to {out_path}")
+    print(f"{'='*60}")
+    if len(df) > 0:
+        logger.info(f"Duration stats:\n{df['duration_hours'].describe()}")
     return df
 
 
