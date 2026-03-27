@@ -56,6 +56,9 @@ def step_collect(config: dict):
     """Step 2: Mine issue-PR pairs from validated repositories."""
     from src.data_collection.github_miner import GitHubMiner
 
+    import time as _time
+    collect_start = _time.time()
+
     miner = GitHubMiner(config)
     all_pairs = []
 
@@ -75,7 +78,7 @@ def step_collect(config: dict):
     for repo in config["repositories"]:
         repo_full = f"{repo['owner']}/{repo['name']}"
         if valid_repos and repo_full not in valid_repos:
-            print(f"Skipping {repo_full} (did not pass validation)")
+            logger.info(f"Skipping {repo_full} (did not pass validation)")
             continue
 
         pairs = miner.mine_issue_pr_pairs(
@@ -92,12 +95,14 @@ def step_collect(config: dict):
     except ImportError:
         saved_path = out_path.with_suffix(".csv")
         df.to_csv(saved_path, index=False)
-        print("  (Saved as CSV — install pyarrow for parquet support)")
+        logger.info("  (Saved as CSV -- install pyarrow for parquet support)")
 
-    print(f"\n{'='*60}")
-    print(f"Collection complete: {len(df)} total issue-PR pairs")
-    print(f"Saved to {saved_path}")
-    print(f"{'='*60}")
+    total_elapsed = _time.time() - collect_start
+    logger.info(f"{'='*60}")
+    logger.info(f"Collection complete: {len(df)} total issue-PR pairs")
+    logger.info(f"Total time: {total_elapsed/60:.1f} minutes")
+    logger.info(f"Saved to {saved_path}")
+    logger.info(f"{'='*60}")
     if len(df) > 0:
         logger.info(f"Duration stats:\n{df['duration_hours'].describe()}")
     return df
