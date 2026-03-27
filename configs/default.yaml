@@ -29,7 +29,7 @@ filtering:
     - "question"
 
   # Target sample size per project
-  target_sample_size: 1500
+  target_sample_size: 200
 
 # NLP feature extraction
 nlp:
