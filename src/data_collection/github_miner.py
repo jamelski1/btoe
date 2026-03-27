@@ -113,10 +113,11 @@ class GitHubMiner:
         issues_skipped_pr = 0
         issues_no_link = 0
         issues_filtered = 0
+        start_time = time.time()
 
-        print(f"\n{'='*60}")
-        print(f"Mining {owner}/{name} — target: {max_pairs} pairs")
-        print(f"{'='*60}")
+        logger.info(f"{'='*60}")
+        logger.info(f"Mining {owner}/{name} — target: {max_pairs} pairs")
+        logger.info(f"{'='*60}")
 
         # Get closed issues, sorted by most recently updated
         issues = repo.get_issues(state="closed", sort="updated", direction="desc")
@@ -129,7 +130,9 @@ class GitHubMiner:
 
             # Progress every 25 issues checked
             if issues_checked % 25 == 0:
-                print(f"  [{owner}/{name}] Checked {issues_checked} issues → {len(pairs)} pairs found so far")
+                elapsed = time.time() - start_time
+                rate = issues_checked / elapsed * 60 if elapsed > 0 else 0
+                logger.info(f"  [{owner}/{name}] Checked {issues_checked} issues -> {len(pairs)} pairs found ({elapsed:.0f}s elapsed, {rate:.1f} issues/min)")
 
             try:
                 pair = self._try_extract_pair(repo, issue)
@@ -142,34 +145,34 @@ class GitHubMiner:
 
                 if self._passes_filters(pair):
                     pairs.append(pair)
-                    print(f"  ✓ Issue #{issue.number} → PR #{pair.pr_number} ({pair.duration_hours:.1f}h) [{len(pairs)}/{max_pairs}]")
+                    logger.info(f"  + Issue #{issue.number} -> PR #{pair.pr_number} ({pair.duration_hours:.1f}h) [{len(pairs)}/{max_pairs}]")
 
-                    # Incremental save every 25 pairs
-                    if save_path and len(pairs) % 25 == 0:
+                    # Save after first match to verify saves work, then every 25
+                    if save_path and (len(pairs) == 1 or len(pairs) % 25 == 0):
                         self._incremental_save(pairs, save_path, owner, name)
                 else:
                     issues_filtered += 1
 
             except RateLimitExceededException:
-                print(f"  ⏳ Rate limit hit after {issues_checked} issues, waiting for reset...")
+                logger.warning(f"  Rate limit hit after {issues_checked} issues, waiting for reset...")
                 self._handle_rate_limit()
-                print(f"  ▶ Resuming...")
+                logger.info(f"  Resuming...")
             except Exception as e:
                 logger.warning(f"Error processing issue #{issue.number}: {e}")
                 continue
 
-        print(f"\n  Summary for {owner}/{name}:")
-        print(f"    Issues checked:    {issues_checked}")
-        print(f"    Skipped (is PR):   {issues_skipped_pr}")
-        print(f"    No linked PR:      {issues_no_link}")
-        print(f"    Filtered out:      {issues_filtered}")
-        print(f"    Valid pairs:       {len(pairs)}")
+        elapsed = time.time() - start_time
+        logger.info(f"  Summary for {owner}/{name} (completed in {elapsed/60:.1f} min):")
+        logger.info(f"    Issues checked:    {issues_checked}")
+        logger.info(f"    Skipped (is PR):   {issues_skipped_pr}")
+        logger.info(f"    No linked PR:      {issues_no_link}")
+        logger.info(f"    Filtered out:      {issues_filtered}")
+        logger.info(f"    Valid pairs:       {len(pairs)}")
 
         # Final incremental save
         if save_path and pairs:
             self._incremental_save(pairs, save_path, owner, name)
 
-        logger.info(f"Mined {len(pairs)} valid issue-PR pairs from {owner}/{name}")
         return pairs
 
     def _incremental_save(self, pairs, save_path, owner, name):
@@ -178,9 +181,14 @@ class GitHubMiner:
         save_path = Path(save_path)
         save_path.parent.mkdir(parents=True, exist_ok=True)
         df = self.pairs_to_dataframe(pairs)
-        incremental_path = save_path.parent / f"{owner}_{name}_partial.parquet"
-        df.to_parquet(incremental_path, index=False)
-        print(f"  💾 Saved {len(pairs)} pairs to {incremental_path}")
+        try:
+            incremental_path = save_path.parent / f"{owner}_{name}_partial.parquet"
+            df.to_parquet(incremental_path, index=False)
+            logger.info(f"  Saved {len(pairs)} pairs to {incremental_path}")
+        except ImportError:
+            incremental_path = save_path.parent / f"{owner}_{name}_partial.csv"
+            df.to_csv(incremental_path, index=False)
+            logger.info(f"  Saved {len(pairs)} pairs to {incremental_path} (CSV fallback)")
 
     def _try_extract_pair(self, repo, issue) -> IssuePRPair | None:
         """Try to extract a linked issue-PR pair from an issue."""
