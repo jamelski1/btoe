@@ -144,8 +144,8 @@ class GitHubMiner:
                     pairs.append(pair)
                     print(f"  ✓ Issue #{issue.number} → PR #{pair.pr_number} ({pair.duration_hours:.1f}h) [{len(pairs)}/{max_pairs}]")
 
-                    # Incremental save every 25 pairs
-                    if save_path and len(pairs) % 25 == 0:
+                    # Save after first match to verify saves work, then every 25
+                    if save_path and (len(pairs) == 1 or len(pairs) % 25 == 0):
                         self._incremental_save(pairs, save_path, owner, name)
                 else:
                     issues_filtered += 1
