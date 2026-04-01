@@ -87,7 +87,12 @@ class NLPFeatureExtractor:
         Returns:
             DataFrame with embedding columns and derived feature columns
         """
+        import time
+
+        total_start = time.time()
+
         # Combine requirement text
+        logger.info("Combining requirement texts (issue title + body + PR title + body)...")
         texts = (
             df["issue_title"].fillna("")
             + " "
@@ -97,32 +102,58 @@ class NLPFeatureExtractor:
             + " "
             + df["pr_body"].fillna("")
         ).tolist()
+        logger.info(f"  {len(texts)} texts prepared, avg length: {sum(len(t) for t in texts) / max(len(texts), 1):.0f} chars")
 
         # Generate embeddings
-        logger.info(f"Generating CodeBERT embeddings for {len(texts)} texts")
+        logger.info(f"Generating CodeBERT embeddings for {len(texts)} texts (batch_size={self.batch_size})...")
+        emb_start = time.time()
         embeddings = self._compute_embeddings(texts)
+        logger.info(f"  Embeddings complete: {embeddings.shape} in {time.time() - emb_start:.1f}s")
 
         # Build feature DataFrame
         emb_cols = [f"emb_{i}" for i in range(embeddings.shape[1])]
         emb_df = pd.DataFrame(embeddings, index=df.index, columns=emb_cols)
 
         # Compute derived features
+        logger.info("Computing derived NLP features...")
         derived = pd.DataFrame(index=df.index)
+
+        logger.info("  Computing semantic complexity scores...")
         derived["complexity_score"] = self._compute_complexity_scores(embeddings)
+
+        logger.info("  Computing cross-reference density...")
         derived["cross_ref_density"] = texts_series_apply(texts, self._count_cross_references)
+
+        logger.info("  Computing ambiguity index...")
         derived["ambiguity_index"] = texts_series_apply(texts, self._compute_ambiguity)
+
+        logger.info("  Computing technical scope...")
         derived["technical_scope"] = texts_series_apply(texts, self._compute_technical_scope)
+
         derived["text_length"] = [len(t) for t in texts]
         derived["word_count"] = [len(t.split()) for t in texts]
 
-        return pd.concat([emb_df, derived], axis=1)
+        result = pd.concat([emb_df, derived], axis=1)
+
+        total_elapsed = time.time() - total_start
+        logger.info(f"NLP feature extraction complete: {result.shape[1]} features for {len(result)} samples in {total_elapsed:.1f}s")
+        logger.info(f"  Embedding dims: {len(emb_cols)}, Derived features: {len(derived.columns)}")
+        logger.info(f"  Derived feature summary:\n{derived.describe().to_string()}")
+
+        return result
 
     def _compute_embeddings(self, texts: list[str]) -> np.ndarray:
         """Compute CodeBERT [CLS] embeddings in batches."""
         all_embeddings = []
+        total_batches = (len(texts) + self.batch_size - 1) // self.batch_size
 
         for i in range(0, len(texts), self.batch_size):
             batch = texts[i : i + self.batch_size]
+            batch_num = i // self.batch_size + 1
+
+            if batch_num == 1 or batch_num % 5 == 0 or batch_num == total_batches:
+                logger.info(f"  Batch {batch_num}/{total_batches} ({i + len(batch)}/{len(texts)} texts)")
+
             encoded = self.tokenizer(
                 batch,
                 padding=True,
