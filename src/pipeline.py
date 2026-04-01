@@ -1,12 +1,14 @@
 """Main pipeline orchestrating the full SE3M replication study.
 
 Usage:
-    python -m src.pipeline --step validate    # Step 1: Validate target repos
-    python -m src.pipeline --step collect     # Step 2: Mine issue-PR pairs
-    python -m src.pipeline --step features    # Step 3: Extract all features
-    python -m src.pipeline --step train       # Step 4: Train and evaluate models
-    python -m src.pipeline --step analyze     # Step 5: SHAP + error analysis
-    python -m src.pipeline --step all         # Run full pipeline
+    python -m src.pipeline --step validate       # Step 1: Validate target repos
+    python -m src.pipeline --step collect        # Step 2: Mine issue-PR pairs
+    python -m src.pipeline --step features       # Step 3: Extract all features (NLP + repo)
+    python -m src.pipeline --step nlp_features   # Step 3a: NLP features only (CodeBERT)
+    python -m src.pipeline --step repo_features  # Step 3b: Repo features only (PyDriller)
+    python -m src.pipeline --step train          # Step 4: Train and evaluate models
+    python -m src.pipeline --step analyze        # Step 5: SHAP + error analysis
+    python -m src.pipeline --step all            # Run full pipeline
 """
 
 import argparse
@@ -108,22 +110,77 @@ def step_collect(config: dict):
     return df
 
 
-def step_features(config: dict):
-    """Step 3: Extract NLP and repository features."""
-    from src.data_collection.repo_cloner import RepoCloner
-    from src.feature_extraction.nlp_features import NLPFeatureExtractor
-    from src.feature_extraction.repo_features import RepoFeatureExtractor
-
+def _load_raw_data():
+    """Load the raw issue-PR pairs dataset (parquet or CSV)."""
     data_dir = get_data_dir()
-    df = pd.read_parquet(data_dir / "raw" / "issue_pr_pairs.parquet")
+    parquet_path = data_dir / "raw" / "issue_pr_pairs.parquet"
+    csv_path = data_dir / "raw" / "issue_pr_pairs.csv"
 
-    # NLP features
+    if parquet_path.exists():
+        logger.info(f"Loading raw data from {parquet_path}")
+        return pd.read_parquet(parquet_path)
+    elif csv_path.exists():
+        logger.info(f"Loading raw data from {csv_path}")
+        return pd.read_csv(csv_path)
+    else:
+        raise FileNotFoundError(
+            f"No raw data found. Run 'python -m src.pipeline --step collect' first.\n"
+            f"Looked for: {parquet_path} and {csv_path}"
+        )
+
+
+def _save_features(df, path):
+    """Save feature DataFrame with parquet/CSV fallback."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        df.to_parquet(path, index=False)
+        logger.info(f"Saved to {path}")
+    except ImportError:
+        csv_path = path.with_suffix(".csv")
+        df.to_csv(csv_path, index=False)
+        logger.info(f"Saved to {csv_path} (CSV fallback)")
+
+
+def step_nlp_features(config: dict):
+    """Step 3a: Extract NLP features (CodeBERT embeddings + derived)."""
+    import time as _time
+    from src.feature_extraction.nlp_features import NLPFeatureExtractor
+
+    start = _time.time()
+    data_dir = get_data_dir()
+    df = _load_raw_data()
+
+    logger.info(f"{'='*60}")
+    logger.info(f"Extracting NLP features for {len(df)} issue-PR pairs")
+    logger.info(f"{'='*60}")
+
     nlp_extractor = NLPFeatureExtractor(config)
     nlp_features = nlp_extractor.extract_all_features(df)
-    nlp_features.to_parquet(data_dir / "processed" / "nlp_features.parquet")
-    logger.info(f"NLP features: {nlp_features.shape}")
 
-    # Repository features (per-repo)
+    out_path = data_dir / "processed" / "nlp_features.parquet"
+    _save_features(nlp_features, out_path)
+
+    elapsed = _time.time() - start
+    logger.info(f"{'='*60}")
+    logger.info(f"NLP features complete: {nlp_features.shape} in {elapsed/60:.1f} min")
+    logger.info(f"{'='*60}")
+    return nlp_features
+
+
+def step_repo_features(config: dict):
+    """Step 3b: Extract repository-mined structural features."""
+    import time as _time
+    from src.data_collection.repo_cloner import RepoCloner
+    from src.feature_extraction.repo_features import RepoFeatureExtractor
+
+    start = _time.time()
+    data_dir = get_data_dir()
+    df = _load_raw_data()
+
+    logger.info(f"{'='*60}")
+    logger.info(f"Extracting repo features for {len(df)} issue-PR pairs")
+    logger.info(f"{'='*60}")
+
     cloner = RepoCloner()
     all_repo_features = []
 
@@ -132,16 +189,30 @@ def step_features(config: dict):
         repo_df = df[df["repo"] == f"{repo['owner']}/{repo['name']}"]
 
         if len(repo_df) == 0:
+            logger.info(f"  No pairs for {repo['owner']}/{repo['name']}, skipping")
             continue
 
+        logger.info(f"  Extracting features for {len(repo_df)} pairs from {repo['owner']}/{repo['name']}...")
         extractor = RepoFeatureExtractor(repo_path, config)
         features = extractor.extract_all_features(repo_df)
         all_repo_features.append(features)
 
     repo_features = pd.concat(all_repo_features)
-    repo_features.to_parquet(data_dir / "processed" / "repo_features.parquet")
-    logger.info(f"Repo features: {repo_features.shape}")
 
+    out_path = data_dir / "processed" / "repo_features.parquet"
+    _save_features(repo_features, out_path)
+
+    elapsed = _time.time() - start
+    logger.info(f"{'='*60}")
+    logger.info(f"Repo features complete: {repo_features.shape} in {elapsed/60:.1f} min")
+    logger.info(f"{'='*60}")
+    return repo_features
+
+
+def step_features(config: dict):
+    """Step 3: Extract all features (NLP + repository)."""
+    nlp_features = step_nlp_features(config)
+    repo_features = step_repo_features(config)
     return nlp_features, repo_features
 
 
@@ -198,7 +269,7 @@ def main():
     parser = argparse.ArgumentParser(description="SE3M Replication Study Pipeline")
     parser.add_argument(
         "--step",
-        choices=["validate", "collect", "features", "train", "analyze", "all"],
+        choices=["validate", "collect", "features", "nlp_features", "repo_features", "train", "analyze", "all"],
         required=True,
         help="Pipeline step to run",
     )
@@ -211,6 +282,8 @@ def main():
         "validate": step_validate,
         "collect": step_collect,
         "features": step_features,
+        "nlp_features": step_nlp_features,
+        "repo_features": step_repo_features,
         "train": step_train,
         "analyze": step_analyze,
     }
