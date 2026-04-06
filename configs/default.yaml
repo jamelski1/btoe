@@ -2,12 +2,12 @@
 
 # Target repositories for mining
 repositories:
-  - owner: apache
-    name: spark
   - owner: microsoft
     name: vscode
   - owner: kubernetes
     name: kubernetes
+  - owner: facebook
+    name: react
 
 # Inclusion/exclusion criteria for issue-PR pairs
 filtering:
@@ -29,7 +29,7 @@ filtering:
     - "question"
 
   # Target sample size per project
-  target_sample_size: 200
+  target_sample_size: 500
 
 # Dimensionality reduction
 pca:
