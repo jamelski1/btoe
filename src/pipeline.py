@@ -216,45 +216,77 @@ def step_features(config: dict):
     return nlp_features, repo_features
 
 
+def _load_features(name):
+    """Load a processed feature file (parquet or CSV)."""
+    data_dir = get_data_dir()
+    parquet_path = data_dir / "processed" / f"{name}.parquet"
+    csv_path = data_dir / "processed" / f"{name}.csv"
+
+    if parquet_path.exists():
+        return pd.read_parquet(parquet_path)
+    elif csv_path.exists():
+        return pd.read_csv(csv_path)
+    else:
+        raise FileNotFoundError(
+            f"No feature file found for '{name}'. "
+            f"Run the appropriate feature extraction step first.\n"
+            f"Looked for: {parquet_path} and {csv_path}"
+        )
+
+
+def step_train_model_a(config: dict):
+    """Step 4a: Train Model A — Text-only (CodeBERT embeddings + derived NLP features)."""
+    from src.modeling.trainer import ModelTrainer
+
+    df = _load_raw_data()
+    nlp_features = _load_features("nlp_features")
+    y = df["duration_hours"]
+
+    trainer = ModelTrainer(config)
+    result_a = trainer.train_and_evaluate(nlp_features, y, "model_a_text_only")
+    return result_a
+
+
 def step_train(config: dict):
     """Step 4: Train Models A, B, C and compare."""
     from src.modeling.trainer import ModelTrainer
 
-    data_dir = get_data_dir()
-    df = pd.read_parquet(data_dir / "raw" / "issue_pr_pairs.parquet")
-    nlp_features = pd.read_parquet(data_dir / "processed" / "nlp_features.parquet")
-    repo_features = pd.read_parquet(data_dir / "processed" / "repo_features.parquet")
-
+    df = _load_raw_data()
+    nlp_features = _load_features("nlp_features")
     y = df["duration_hours"]
     trainer = ModelTrainer(config)
 
     # Model A: Text-only
     result_a = trainer.train_and_evaluate(nlp_features, y, "model_a_text_only")
 
-    # Model B: Repo-only
-    result_b = trainer.train_and_evaluate(repo_features, y, "model_b_repo_only")
+    # Model B: Repo-only (skip if not yet extracted)
+    try:
+        repo_features = _load_features("repo_features")
+        result_b = trainer.train_and_evaluate(repo_features, y, "model_b_repo_only")
 
-    # Model C: Combined
-    combined = pd.concat([nlp_features, repo_features], axis=1)
-    result_c = trainer.train_and_evaluate(combined, y, "model_c_combined")
+        # Model C: Combined
+        combined = pd.concat([nlp_features, repo_features], axis=1)
+        result_c = trainer.train_and_evaluate(combined, y, "model_c_combined")
 
-    # Statistical comparison
-    comparisons = trainer.compare_models(result_a, result_b, result_c)
+        # Statistical comparison
+        comparisons = trainer.compare_models(result_a, result_b, result_c)
 
-    # Save results
-    results = {
-        "model_a": result_a.cv_scores,
-        "model_b": result_b.cv_scores,
-        "model_c": result_c.cv_scores,
-        "comparisons": comparisons,
-    }
+        results = {
+            "model_a": result_a.test_metrics,
+            "model_b": result_b.test_metrics,
+            "model_c": result_c.test_metrics,
+            "comparisons": comparisons,
+        }
+    except FileNotFoundError:
+        logger.warning("Repo features not found -- skipping Models B and C")
+        results = {"model_a": result_a.test_metrics}
 
     out_path = get_model_dir() / "results.json"
     with open(out_path, "w") as f:
         json.dump(results, f, indent=2)
 
     logger.info(f"Results saved to {out_path}")
-    return result_a, result_b, result_c, comparisons
+    return results
 
 
 def step_analyze(config: dict):
@@ -269,7 +301,8 @@ def main():
     parser = argparse.ArgumentParser(description="SE3M Replication Study Pipeline")
     parser.add_argument(
         "--step",
-        choices=["validate", "collect", "features", "nlp_features", "repo_features", "train", "analyze", "all"],
+        choices=["validate", "collect", "features", "nlp_features", "repo_features",
+                 "train_model_a", "train", "analyze", "all"],
         required=True,
         help="Pipeline step to run",
     )
@@ -284,6 +317,7 @@ def main():
         "features": step_features,
         "nlp_features": step_nlp_features,
         "repo_features": step_repo_features,
+        "train_model_a": step_train_model_a,
         "train": step_train,
         "analyze": step_analyze,
     }

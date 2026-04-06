@@ -6,20 +6,25 @@ Implements the three model configurations:
 - Model C: Combined (NLP + repo features)
 
 All use XGBoost with 5-fold CV and Bayesian hyperparameter optimization.
+Uses 80/20 train/test holdout, with 5-fold CV on the training set only.
 """
 
+import json
 import logging
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
 
+import joblib
 import numpy as np
 import pandas as pd
 from scipy import stats
-from sklearn.model_selection import KFold, cross_val_predict
+from sklearn.model_selection import KFold, cross_val_predict, train_test_split
 from skopt import BayesSearchCV
 from skopt.space import Integer, Real
 from xgboost import XGBRegressor
 
-from src.utils.config import load_config
+from src.utils.config import get_model_dir, load_config
 
 logger = logging.getLogger(__name__)
 
@@ -29,11 +34,19 @@ class ModelResult:
     """Results from training and evaluating a model configuration."""
 
     name: str
-    predictions: np.ndarray
-    actuals: np.ndarray
+    # Train set (CV predictions)
+    train_predictions: np.ndarray
+    train_actuals: np.ndarray
+    train_metrics: dict
+    # Holdout test set
+    test_predictions: np.ndarray
+    test_actuals: np.ndarray
+    test_metrics: dict
+    # Model info
     best_params: dict
-    cv_scores: dict
     feature_names: list[str]
+    train_indices: np.ndarray = field(default=None, repr=False)
+    test_indices: np.ndarray = field(default=None, repr=False)
 
 
 class ModelTrainer:
@@ -60,7 +73,12 @@ class ModelTrainer:
     def train_and_evaluate(
         self, X: pd.DataFrame, y: pd.Series, model_name: str
     ) -> ModelResult:
-        """Train a model with Bayesian optimization and cross-validation.
+        """Train a model with 80/20 holdout, Bayesian optimization, and 5-fold CV.
+
+        1. Split data into 80% train / 20% test holdout
+        2. Run Bayesian optimization with 5-fold CV on training set
+        3. Evaluate best model on held-out test set
+        4. Save model and results to disk
 
         Args:
             X: Feature matrix
@@ -68,25 +86,43 @@ class ModelTrainer:
             model_name: Identifier ("model_a", "model_b", "model_c")
 
         Returns:
-            ModelResult with predictions, metrics, and best parameters
+            ModelResult with train/test predictions, metrics, and best parameters
         """
-        logger.info(f"Training {model_name} with {X.shape[1]} features, {len(y)} samples")
+        total_start = time.time()
+        test_size = self.model_cfg["test_size"]
 
-        # Set up base estimator
+        logger.info(f"{'='*60}")
+        logger.info(f"Training {model_name}")
+        logger.info(f"  Features: {X.shape[1]}, Samples: {len(y)}")
+        logger.info(f"  Split: {(1-test_size)*100:.0f}% train / {test_size*100:.0f}% test")
+        logger.info(f"{'='*60}")
+
+        # --- Step 1: 80/20 holdout split ---
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=test_size, random_state=self.seed
+        )
+        logger.info(f"  Train set: {len(X_train)} samples")
+        logger.info(f"  Test set:  {len(X_test)} samples")
+        logger.info(f"  Target stats (train): mean={y_train.mean():.1f}h, median={y_train.median():.1f}h, std={y_train.std():.1f}h")
+        logger.info(f"  Target stats (test):  mean={y_test.mean():.1f}h, median={y_test.median():.1f}h, std={y_test.std():.1f}h")
+
+        # --- Step 2: Bayesian hyperparameter optimization on train set ---
+        logger.info(f"  Starting Bayesian optimization ({self.model_cfg['bayes_opt']['n_calls']} iterations, {self.model_cfg['cv_folds']}-fold CV)...")
+        bayes_start = time.time()
+
         base_xgb = XGBRegressor(
             objective="reg:squarederror",
             random_state=self.seed,
             n_jobs=-1,
         )
 
-        # Bayesian hyperparameter search
-        bayes_cfg = self.model_cfg["bayes_opt"]
         cv = KFold(
             n_splits=self.model_cfg["cv_folds"],
             shuffle=True,
             random_state=self.seed,
         )
 
+        bayes_cfg = self.model_cfg["bayes_opt"]
         search = BayesSearchCV(
             estimator=base_xgb,
             search_spaces=self.get_search_space(),
@@ -98,25 +134,113 @@ class ModelTrainer:
             verbose=0,
         )
 
-        search.fit(X, y)
-        logger.info(f"Best params for {model_name}: {search.best_params_}")
+        # Fit with progress callback
+        iteration_count = [0]
+        def on_step(result):
+            iteration_count[0] += 1
+            i = iteration_count[0]
+            best = -result.fun
+            if i == 1 or i % 10 == 0 or i == bayes_cfg["n_calls"]:
+                elapsed = time.time() - bayes_start
+                logger.info(f"    Iteration {i}/{bayes_cfg['n_calls']}: best MAE={best:.2f}h ({elapsed:.0f}s elapsed)")
+            return False  # don't stop early
 
-        # Get cross-validated predictions using best estimator
+        search.fit(X_train, y_train, callback=on_step)
+
+        bayes_elapsed = time.time() - bayes_start
+        logger.info(f"  Bayesian optimization complete in {bayes_elapsed/60:.1f} min")
+        logger.info(f"  Best params: {dict(search.best_params_)}")
+        logger.info(f"  Best CV MAE: {-search.best_score_:.2f}h")
+
+        # --- Step 3: Cross-validated predictions on train set ---
+        logger.info(f"  Computing 5-fold CV predictions on training set...")
         best_model = search.best_estimator_
-        cv_predictions = cross_val_predict(best_model, X, y, cv=cv)
+        train_cv_predictions = cross_val_predict(best_model, X_train, y_train, cv=cv)
 
-        # Compute metrics
-        metrics = self.compute_metrics(y.values, cv_predictions)
-        logger.info(f"{model_name} metrics: {metrics}")
+        train_metrics = self.compute_metrics(y_train.values, train_cv_predictions)
+        logger.info(f"  Train CV metrics:")
+        self._log_metrics(train_metrics)
 
-        return ModelResult(
+        # --- Step 4: Evaluate on held-out test set ---
+        logger.info(f"  Evaluating on held-out test set ({len(X_test)} samples)...")
+        best_model.fit(X_train, y_train)  # refit on full training set
+        test_predictions = best_model.predict(X_test)
+
+        test_metrics = self.compute_metrics(y_test.values, test_predictions)
+        logger.info(f"  Test set metrics:")
+        self._log_metrics(test_metrics)
+
+        # --- Step 5: Save model and results ---
+        result = ModelResult(
             name=model_name,
-            predictions=cv_predictions,
-            actuals=y.values,
+            train_predictions=train_cv_predictions,
+            train_actuals=y_train.values,
+            train_metrics=train_metrics,
+            test_predictions=test_predictions,
+            test_actuals=y_test.values,
+            test_metrics=test_metrics,
             best_params=dict(search.best_params_),
-            cv_scores=metrics,
             feature_names=list(X.columns),
+            train_indices=X_train.index.values,
+            test_indices=X_test.index.values,
         )
+
+        self._save_result(result, best_model)
+
+        total_elapsed = time.time() - total_start
+        logger.info(f"{'='*60}")
+        logger.info(f"{model_name} complete in {total_elapsed/60:.1f} min")
+        logger.info(f"{'='*60}")
+
+        return result
+
+    def _log_metrics(self, metrics: dict):
+        """Log metrics in a readable format."""
+        logger.info(f"    MAE:      {metrics['mae']:.2f}h")
+        logger.info(f"    MdAE:     {metrics['mdae']:.2f}h")
+        logger.info(f"    MMRE:     {metrics['mre']:.2%}")
+        logger.info(f"    PRED(25): {metrics['pred_25']:.1f}%")
+        logger.info(f"    PRED(50): {metrics['pred_50']:.1f}%")
+        logger.info(f"    R2:       {metrics['r2']:.4f}")
+        logger.info(f"    SA:       {metrics['sa']:.1f}%")
+
+    def _save_result(self, result: ModelResult, model: XGBRegressor):
+        """Save model artifact and results JSON to disk."""
+        model_dir = get_model_dir() / result.name
+        model_dir.mkdir(parents=True, exist_ok=True)
+
+        # Save trained model
+        model_path = model_dir / "model.joblib"
+        joblib.dump(model, model_path)
+        logger.info(f"  Model saved to {model_path}")
+
+        # Save results JSON
+        results_dict = {
+            "name": result.name,
+            "train_metrics": result.train_metrics,
+            "test_metrics": result.test_metrics,
+            "best_params": result.best_params,
+            "n_features": len(result.feature_names),
+            "n_train": len(result.train_actuals),
+            "n_test": len(result.test_actuals),
+            "train_indices": result.train_indices.tolist(),
+            "test_indices": result.test_indices.tolist(),
+        }
+        results_path = model_dir / "results.json"
+        with open(results_path, "w") as f:
+            json.dump(results_dict, f, indent=2)
+        logger.info(f"  Results saved to {results_path}")
+
+        # Save predictions for later analysis
+        preds_df = pd.DataFrame({
+            "split": (["train"] * len(result.train_actuals) +
+                      ["test"] * len(result.test_actuals)),
+            "actual_hours": np.concatenate([result.train_actuals, result.test_actuals]),
+            "predicted_hours": np.concatenate([result.train_predictions, result.test_predictions]),
+        })
+        preds_path = model_dir / "predictions.csv"
+        preds_df.to_csv(preds_path, index=False)
+        logger.info(f"  Predictions saved to {preds_path}")
 
     def compute_metrics(self, actuals: np.ndarray, predictions: np.ndarray) -> dict:
         """Compute all evaluation metrics."""
@@ -157,8 +281,8 @@ class ModelTrainer:
         ]
 
         for label, r1, r2 in pairs:
-            errors_1 = np.abs(r1.actuals - r1.predictions)
-            errors_2 = np.abs(r2.actuals - r2.predictions)
+            errors_1 = np.abs(r1.test_actuals - r1.test_predictions)
+            errors_2 = np.abs(r2.test_actuals - r2.test_predictions)
 
             # Wilcoxon signed-rank test
             stat, p_value = stats.wilcoxon(errors_1, errors_2)
