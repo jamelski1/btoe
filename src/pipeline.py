@@ -67,6 +67,18 @@ def step_collect(config: dict):
     out_path = get_data_dir() / "raw" / "issue_pr_pairs.parquet"
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # Load existing data to append to (if any)
+    existing_df = None
+    existing_issue_keys = set()
+    try:
+        existing_df = _load_raw_data()
+        existing_issue_keys = set(
+            existing_df["repo"] + "#" + existing_df["issue_number"].astype(str)
+        )
+        logger.info(f"Found existing dataset with {len(existing_df)} pairs")
+    except FileNotFoundError:
+        logger.info("No existing dataset found, starting fresh")
+
     # Only collect from repos that passed validation
     validation_path = get_data_dir() / "repo_validation.json"
     valid_repos = set()
@@ -83,12 +95,33 @@ def step_collect(config: dict):
             logger.info(f"Skipping {repo_full} (did not pass validation)")
             continue
 
+        # Count how many we already have for this repo
+        existing_for_repo = sum(1 for k in existing_issue_keys if k.startswith(repo_full + "#"))
+        target = config["filtering"]["target_sample_size"]
+        remaining = target - existing_for_repo
+
+        if remaining <= 0:
+            logger.info(f"Already have {existing_for_repo}/{target} pairs for {repo_full}, skipping")
+            continue
+
+        logger.info(f"Have {existing_for_repo} pairs for {repo_full}, collecting {remaining} more")
         pairs = miner.mine_issue_pr_pairs(
-            repo["owner"], repo["name"], save_path=out_path
+            repo["owner"], repo["name"], max_pairs=remaining, save_path=out_path
         )
         all_pairs.extend(pairs)
 
-    df = miner.pairs_to_dataframe(all_pairs)
+    new_df = miner.pairs_to_dataframe(all_pairs)
+
+    # Merge with existing data, dedup by repo+issue_number
+    if existing_df is not None and len(new_df) > 0:
+        combined_df = pd.concat([existing_df, new_df], ignore_index=True)
+        combined_df = combined_df.drop_duplicates(subset=["repo", "issue_number"], keep="first")
+        df = combined_df
+        logger.info(f"Merged: {len(existing_df)} existing + {len(new_df)} new = {len(df)} total (after dedup)")
+    elif existing_df is not None:
+        df = existing_df
+    else:
+        df = new_df
 
     # Save final combined dataset
     try:
