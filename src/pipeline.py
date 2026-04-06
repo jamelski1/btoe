@@ -234,12 +234,35 @@ def _load_features(name):
         )
 
 
+def _apply_duration_filter(df, features, config):
+    """Filter samples by duration bounds from config, keeping df and features aligned."""
+    max_hours = config["filtering"]["max_duration_days"] * 24
+    min_hours = config["filtering"]["min_duration_hours"]
+
+    mask = (df["duration_hours"] >= min_hours) & (df["duration_hours"] <= max_hours)
+    n_before = len(df)
+    df_filtered = df[mask].reset_index(drop=True)
+    features_filtered = features[mask].reset_index(drop=True)
+    n_after = len(df_filtered)
+
+    if n_before != n_after:
+        logger.info(f"  Duration filter: {n_before} -> {n_after} samples "
+                     f"(removed {n_before - n_after} outside [{min_hours}h, {max_hours}h])")
+    else:
+        logger.info(f"  Duration filter: all {n_after} samples within bounds")
+
+    return df_filtered, features_filtered
+
+
 def step_train_model_a(config: dict):
     """Step 4a: Train Model A — Text-only (CodeBERT embeddings + derived NLP features)."""
     from src.modeling.trainer import ModelTrainer
 
     df = _load_raw_data()
     nlp_features = _load_features("nlp_features")
+
+    # Apply duration filter (may be tighter than what was used during collection)
+    df, nlp_features = _apply_duration_filter(df, nlp_features, config)
     y = df["duration_hours"]
 
     trainer = ModelTrainer(config)

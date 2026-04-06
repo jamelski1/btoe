@@ -18,7 +18,7 @@ filtering:
 
   # Issue-PR pair filtering
   min_description_length: 50        # characters
-  max_duration_days: 365             # exclude outlier long-running issues
+  max_duration_days: 90               # exclude outlier long-running issues
   min_duration_hours: 1              # exclude trivially fast closures
   require_linked_pr: true
   require_merged_pr: true

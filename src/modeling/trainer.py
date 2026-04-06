@@ -106,6 +106,12 @@ class ModelTrainer:
         logger.info(f"  Target stats (train): mean={y_train.mean():.1f}h, median={y_train.median():.1f}h, std={y_train.std():.1f}h")
         logger.info(f"  Target stats (test):  mean={y_test.mean():.1f}h, median={y_test.median():.1f}h, std={y_test.std():.1f}h")
 
+        # --- Log-transform target to handle skewed distribution ---
+        y_train_log = np.log1p(y_train)
+        y_test_log = np.log1p(y_test)
+        logger.info(f"  Log-transformed target: train range [{y_train_log.min():.2f}, {y_train_log.max():.2f}], "
+                     f"test range [{y_test_log.min():.2f}, {y_test_log.max():.2f}]")
+
         # --- Step 2: Bayesian hyperparameter optimization on train set ---
         logger.info(f"  Starting Bayesian optimization ({self.model_cfg['bayes_opt']['n_calls']} iterations, {self.model_cfg['cv_folds']}-fold CV)...")
         bayes_start = time.time()
@@ -142,29 +148,37 @@ class ModelTrainer:
             best = -result.fun
             if i == 1 or i % 10 == 0 or i == bayes_cfg["n_calls"]:
                 elapsed = time.time() - bayes_start
-                logger.info(f"    Iteration {i}/{bayes_cfg['n_calls']}: best MAE={best:.2f}h ({elapsed:.0f}s elapsed)")
+                logger.info(f"    Iteration {i}/{bayes_cfg['n_calls']}: best log-MAE={best:.4f} ({elapsed:.0f}s elapsed)")
             return False  # don't stop early
 
-        search.fit(X_train, y_train, callback=on_step)
+        search.fit(X_train, y_train_log, callback=on_step)
 
         bayes_elapsed = time.time() - bayes_start
         logger.info(f"  Bayesian optimization complete in {bayes_elapsed/60:.1f} min")
         logger.info(f"  Best params: {dict(search.best_params_)}")
-        logger.info(f"  Best CV MAE: {-search.best_score_:.2f}h")
+        logger.info(f"  Best CV log-MAE: {-search.best_score_:.4f}")
 
         # --- Step 3: Cross-validated predictions on train set ---
         logger.info(f"  Computing 5-fold CV predictions on training set...")
         best_model = search.best_estimator_
-        train_cv_predictions = cross_val_predict(best_model, X_train, y_train, cv=cv)
+        train_cv_preds_log = cross_val_predict(best_model, X_train, y_train_log, cv=cv)
+
+        # Convert back to original hours for metrics
+        train_cv_predictions = np.expm1(train_cv_preds_log)
+        train_cv_predictions = np.maximum(train_cv_predictions, 0)  # clip negatives
 
         train_metrics = self.compute_metrics(y_train.values, train_cv_predictions)
-        logger.info(f"  Train CV metrics:")
+        logger.info(f"  Train CV metrics (in original hours):")
         self._log_metrics(train_metrics)
 
         # --- Step 4: Evaluate on held-out test set ---
         logger.info(f"  Evaluating on held-out test set ({len(X_test)} samples)...")
-        best_model.fit(X_train, y_train)  # refit on full training set
-        test_predictions = best_model.predict(X_test)
+        best_model.fit(X_train, y_train_log)  # refit on full training set
+        test_preds_log = best_model.predict(X_test)
+
+        # Convert back to original hours
+        test_predictions = np.expm1(test_preds_log)
+        test_predictions = np.maximum(test_predictions, 0)
 
         test_metrics = self.compute_metrics(y_test.values, test_predictions)
         logger.info(f"  Test set metrics:")
