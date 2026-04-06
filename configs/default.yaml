@@ -31,6 +31,10 @@ filtering:
   # Target sample size per project
   target_sample_size: 200
 
+# Dimensionality reduction
+pca:
+  n_components: 50               # reduce 768 embeddings to 50 PCA components
+
 # NLP feature extraction
 nlp:
   model_name: "microsoft/codebert-base"
