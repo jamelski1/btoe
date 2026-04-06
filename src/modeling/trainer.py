@@ -19,7 +19,9 @@ import joblib
 import numpy as np
 import pandas as pd
 from scipy import stats
+from sklearn.decomposition import PCA
 from sklearn.model_selection import KFold, cross_val_predict, train_test_split
+from sklearn.preprocessing import StandardScaler
 from skopt import BayesSearchCV
 from skopt.space import Integer, Real
 from xgboost import XGBRegressor
@@ -56,6 +58,68 @@ class ModelTrainer:
         self.config = config or load_config()
         self.model_cfg = self.config["modeling"]
         self.seed = self.model_cfg["random_seed"]
+
+    def reduce_embeddings(self, X: pd.DataFrame, n_components: int = None) -> tuple:
+        """Apply PCA to embedding columns, keeping derived features intact.
+
+        Fits PCA on the training data only. Returns reduced features and
+        the fitted scaler + PCA objects for transforming test data.
+
+        Embedding columns are identified by the 'emb_' prefix.
+        """
+        emb_cols = [c for c in X.columns if c.startswith("emb_")]
+        other_cols = [c for c in X.columns if not c.startswith("emb_")]
+
+        if not emb_cols:
+            logger.info("  No embedding columns found, skipping PCA")
+            return X, None, None
+
+        n_emb = len(emb_cols)
+        if n_components is None:
+            cfg_components = self.config.get("pca", {}).get("n_components", 50)
+            n_components = min(cfg_components, len(X) // 5)
+        n_components = min(n_components, n_emb, len(X))
+
+        logger.info(f"  PCA: reducing {n_emb} embedding dims -> {n_components} components")
+
+        # Standardize embeddings before PCA
+        scaler = StandardScaler()
+        emb_scaled = scaler.fit_transform(X[emb_cols])
+
+        pca = PCA(n_components=n_components, random_state=self.seed)
+        emb_reduced = pca.fit_transform(emb_scaled)
+
+        variance_explained = pca.explained_variance_ratio_.sum() * 100
+        logger.info(f"  PCA: {variance_explained:.1f}% variance retained with {n_components} components")
+
+        # Build new feature DataFrame
+        pca_cols = [f"pca_{i}" for i in range(n_components)]
+        pca_df = pd.DataFrame(emb_reduced, index=X.index, columns=pca_cols)
+        other_df = X[other_cols].reset_index(drop=True)
+        pca_df = pca_df.reset_index(drop=True)
+
+        X_reduced = pd.concat([pca_df, other_df], axis=1)
+        logger.info(f"  Final feature set: {len(pca_cols)} PCA + {len(other_cols)} derived = {X_reduced.shape[1]} features")
+
+        return X_reduced, scaler, pca
+
+    def transform_embeddings(self, X: pd.DataFrame, scaler, pca) -> pd.DataFrame:
+        """Apply a previously fitted PCA transform to new data (e.g., test set)."""
+        emb_cols = [c for c in X.columns if c.startswith("emb_")]
+        other_cols = [c for c in X.columns if not c.startswith("emb_")]
+
+        if scaler is None or pca is None:
+            return X
+
+        emb_scaled = scaler.transform(X[emb_cols])
+        emb_reduced = pca.transform(emb_scaled)
+
+        pca_cols = [f"pca_{i}" for i in range(emb_reduced.shape[1])]
+        pca_df = pd.DataFrame(emb_reduced, index=X.index, columns=pca_cols)
+        other_df = X[other_cols].reset_index(drop=True)
+        pca_df = pca_df.reset_index(drop=True)
+
+        return pd.concat([pca_df, other_df], axis=1)
 
     def get_search_space(self) -> dict:
         """Define Bayesian optimization search space for XGBoost."""
@@ -105,6 +169,14 @@ class ModelTrainer:
         logger.info(f"  Test set:  {len(X_test)} samples")
         logger.info(f"  Target stats (train): mean={y_train.mean():.1f}h, median={y_train.median():.1f}h, std={y_train.std():.1f}h")
         logger.info(f"  Target stats (test):  mean={y_test.mean():.1f}h, median={y_test.median():.1f}h, std={y_test.std():.1f}h")
+
+        # --- PCA reduction on embeddings (fit on train only) ---
+        emb_cols = [c for c in X_train.columns if c.startswith("emb_")]
+        if emb_cols:
+            X_train, scaler, pca = self.reduce_embeddings(X_train)
+            X_test = self.transform_embeddings(X_test, scaler, pca)
+        else:
+            scaler, pca = None, None
 
         # --- Log-transform target to handle skewed distribution ---
         y_train_log = np.log1p(y_train)
@@ -194,12 +266,12 @@ class ModelTrainer:
             test_actuals=y_test.values,
             test_metrics=test_metrics,
             best_params=dict(search.best_params_),
-            feature_names=list(X.columns),
+            feature_names=list(X_train.columns),
             train_indices=X_train.index.values,
             test_indices=X_test.index.values,
         )
 
-        self._save_result(result, best_model)
+        self._save_result(result, best_model, scaler=scaler, pca=pca)
 
         total_elapsed = time.time() - total_start
         logger.info(f"{'='*60}")
@@ -218,10 +290,18 @@ class ModelTrainer:
         logger.info(f"    R2:       {metrics['r2']:.4f}")
         logger.info(f"    SA:       {metrics['sa']:.1f}%")
 
-    def _save_result(self, result: ModelResult, model: XGBRegressor):
+    def _save_result(self, result: ModelResult, model: XGBRegressor, scaler=None, pca=None):
         """Save model artifact and results JSON to disk."""
         model_dir = get_model_dir() / result.name
         model_dir.mkdir(parents=True, exist_ok=True)
+
+        # Save PCA/scaler if used
+        if scaler is not None:
+            joblib.dump(scaler, model_dir / "scaler.joblib")
+        if pca is not None:
+            joblib.dump(pca, model_dir / "pca.joblib")
+            logger.info(f"  PCA ({pca.n_components_} components, "
+                        f"{pca.explained_variance_ratio_.sum()*100:.1f}% variance) saved")
 
         # Save trained model
         model_path = model_dir / "model.joblib"
