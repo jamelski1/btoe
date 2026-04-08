@@ -104,9 +104,18 @@ def step_collect(config: dict):
             logger.info(f"Already have {existing_for_repo}/{target} pairs for {repo_full}, skipping")
             continue
 
+        # Build skip set: issue numbers we already have for this repo
+        skip_numbers = set()
+        if existing_df is not None:
+            repo_existing = existing_df[existing_df["repo"] == repo_full]
+            skip_numbers = set(repo_existing["issue_number"].tolist())
+
         logger.info(f"Have {existing_for_repo} pairs for {repo_full}, collecting {remaining} more")
         pairs = miner.mine_issue_pr_pairs(
-            repo["owner"], repo["name"], max_pairs=remaining, save_path=out_path
+            repo["owner"], repo["name"],
+            max_pairs=remaining,
+            save_path=out_path,
+            skip_issue_numbers=skip_numbers,
         )
         all_pairs.extend(pairs)
 

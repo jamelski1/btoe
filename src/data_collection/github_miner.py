@@ -98,25 +98,32 @@ class GitHubMiner:
             time.sleep(wait_seconds)
 
     def mine_issue_pr_pairs(self, owner: str, name: str, max_pairs: int = None,
-                            save_path=None) -> list[IssuePRPair]:
+                            save_path=None, skip_issue_numbers: set = None) -> list[IssuePRPair]:
         """Mine linked issue-PR pairs from a repository.
 
         Identifies issues that reference merged PRs through:
         1. PR body references ("fixes #123", "closes #123")
         2. GitHub timeline events (cross-references)
         3. Commit message references
+
+        Args:
+            skip_issue_numbers: Set of issue numbers to skip (already collected)
         """
         max_pairs = max_pairs or self.filter_cfg["target_sample_size"]
+        skip_issue_numbers = skip_issue_numbers or set()
         repo = self.gh.get_repo(f"{owner}/{name}")
         pairs = []
         issues_checked = 0
         issues_skipped_pr = 0
+        issues_skipped_existing = 0
         issues_no_link = 0
         issues_filtered = 0
         start_time = time.time()
 
         logger.info(f"{'='*60}")
         logger.info(f"Mining {owner}/{name} — target: {max_pairs} pairs")
+        if skip_issue_numbers:
+            logger.info(f"  Skipping {len(skip_issue_numbers)} already-collected issues")
         logger.info(f"{'='*60}")
 
         # Get closed issues, sorted by most recently updated
@@ -126,13 +133,18 @@ class GitHubMiner:
             if len(pairs) >= max_pairs:
                 break
 
+            # Skip issues we've already collected (saves API calls)
+            if issue.number in skip_issue_numbers:
+                issues_skipped_existing += 1
+                continue
+
             issues_checked += 1
 
             # Progress every 25 issues checked
             if issues_checked % 25 == 0:
                 elapsed = time.time() - start_time
                 rate = issues_checked / elapsed * 60 if elapsed > 0 else 0
-                logger.info(f"  [{owner}/{name}] Checked {issues_checked} issues -> {len(pairs)} pairs found ({elapsed:.0f}s elapsed, {rate:.1f} issues/min)")
+                logger.info(f"  [{owner}/{name}] Checked {issues_checked} issues -> {len(pairs)} pairs found ({elapsed:.0f}s elapsed, {rate:.1f} issues/min, {issues_skipped_existing} pre-skipped)")
 
             try:
                 pair = self._try_extract_pair(repo, issue)
@@ -163,11 +175,12 @@ class GitHubMiner:
 
         elapsed = time.time() - start_time
         logger.info(f"  Summary for {owner}/{name} (completed in {elapsed/60:.1f} min):")
-        logger.info(f"    Issues checked:    {issues_checked}")
-        logger.info(f"    Skipped (is PR):   {issues_skipped_pr}")
-        logger.info(f"    No linked PR:      {issues_no_link}")
-        logger.info(f"    Filtered out:      {issues_filtered}")
-        logger.info(f"    Valid pairs:       {len(pairs)}")
+        logger.info(f"    Pre-skipped (already had): {issues_skipped_existing}")
+        logger.info(f"    Issues checked:            {issues_checked}")
+        logger.info(f"    Skipped (is PR):           {issues_skipped_pr}")
+        logger.info(f"    No linked PR:              {issues_no_link}")
+        logger.info(f"    Filtered out:              {issues_filtered}")
+        logger.info(f"    Valid pairs:               {len(pairs)}")
 
         # Final incremental save
         if save_path and pairs:
