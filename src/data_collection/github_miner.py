@@ -98,7 +98,8 @@ class GitHubMiner:
             time.sleep(wait_seconds)
 
     def mine_issue_pr_pairs(self, owner: str, name: str, max_pairs: int = None,
-                            save_path=None, skip_issue_numbers: set = None) -> list[IssuePRPair]:
+                            save_path=None, skip_issue_numbers: set = None,
+                            checked_log_path=None) -> list[IssuePRPair]:
         """Mine linked issue-PR pairs from a repository.
 
         Identifies issues that reference merged PRs through:
@@ -107,10 +108,33 @@ class GitHubMiner:
         3. Commit message references
 
         Args:
-            skip_issue_numbers: Set of issue numbers to skip (already collected)
+            skip_issue_numbers: Set of issue numbers to skip (already collected
+                or already evaluated and rejected). The miner adds every issue
+                it processes to this set during the run.
+            checked_log_path: Path to JSON file storing checked issue numbers.
+                Loaded at start, updated periodically, saved at end.
         """
+        from pathlib import Path
+        import json as _json
+
         max_pairs = max_pairs or self.filter_cfg["target_sample_size"]
-        skip_issue_numbers = skip_issue_numbers or set()
+        skip_issue_numbers = set(skip_issue_numbers) if skip_issue_numbers else set()
+
+        # Load persistent checked log (issues we've evaluated before, valid or not)
+        checked_log_path = Path(checked_log_path) if checked_log_path else None
+        checked_set = set()
+        if checked_log_path and checked_log_path.exists():
+            try:
+                with open(checked_log_path) as f:
+                    data = _json.load(f)
+                    checked_set = set(data.get("checked", []))
+                logger.info(f"  Loaded {len(checked_set)} previously-checked issue numbers from {checked_log_path}")
+            except Exception as e:
+                logger.warning(f"  Failed to load checked log: {e}")
+
+        # Combine skip sets: explicit skips + persistent checked log
+        skip_issue_numbers = skip_issue_numbers | checked_set
+
         repo = self.gh.get_repo(f"{owner}/{name}")
         pairs = []
         issues_checked = 0
@@ -118,12 +142,13 @@ class GitHubMiner:
         issues_skipped_existing = 0
         issues_no_link = 0
         issues_filtered = 0
+        newly_checked = set()  # numbers checked in THIS run
         start_time = time.time()
 
         logger.info(f"{'='*60}")
         logger.info(f"Mining {owner}/{name} — target: {max_pairs} pairs")
         if skip_issue_numbers:
-            logger.info(f"  Skipping {len(skip_issue_numbers)} already-collected issues")
+            logger.info(f"  Skipping {len(skip_issue_numbers)} previously-seen issues")
         logger.info(f"{'='*60}")
 
         # Get closed issues, sorted by most recently updated
@@ -133,18 +158,23 @@ class GitHubMiner:
             if len(pairs) >= max_pairs:
                 break
 
-            # Skip issues we've already collected (saves API calls)
+            # Skip issues we've already evaluated (saves API calls)
             if issue.number in skip_issue_numbers:
                 issues_skipped_existing += 1
                 continue
 
             issues_checked += 1
+            newly_checked.add(issue.number)
 
             # Progress every 25 issues checked
             if issues_checked % 25 == 0:
                 elapsed = time.time() - start_time
                 rate = issues_checked / elapsed * 60 if elapsed > 0 else 0
                 logger.info(f"  [{owner}/{name}] Checked {issues_checked} issues -> {len(pairs)} pairs found ({elapsed:.0f}s elapsed, {rate:.1f} issues/min, {issues_skipped_existing} pre-skipped)")
+
+                # Periodically persist the checked log so we don't lose progress
+                if checked_log_path and issues_checked % 100 == 0:
+                    self._save_checked_log(checked_log_path, checked_set | newly_checked)
 
             try:
                 pair = self._try_extract_pair(repo, issue)
@@ -175,18 +205,39 @@ class GitHubMiner:
 
         elapsed = time.time() - start_time
         logger.info(f"  Summary for {owner}/{name} (completed in {elapsed/60:.1f} min):")
-        logger.info(f"    Pre-skipped (already had): {issues_skipped_existing}")
-        logger.info(f"    Issues checked:            {issues_checked}")
-        logger.info(f"    Skipped (is PR):           {issues_skipped_pr}")
-        logger.info(f"    No linked PR:              {issues_no_link}")
-        logger.info(f"    Filtered out:              {issues_filtered}")
-        logger.info(f"    Valid pairs:               {len(pairs)}")
+        logger.info(f"    Pre-skipped (already seen): {issues_skipped_existing}")
+        logger.info(f"    Issues checked:             {issues_checked}")
+        logger.info(f"    Skipped (is PR):            {issues_skipped_pr}")
+        logger.info(f"    No linked PR:               {issues_no_link}")
+        logger.info(f"    Filtered out:               {issues_filtered}")
+        logger.info(f"    Valid pairs:                {len(pairs)}")
 
         # Final incremental save
         if save_path and pairs:
             self._incremental_save(pairs, save_path, owner, name)
 
+        # Final save of checked log
+        if checked_log_path:
+            self._save_checked_log(checked_log_path, checked_set | newly_checked)
+            logger.info(f"  Checked log updated: {len(checked_set | newly_checked)} total issue numbers tracked")
+
         return pairs
+
+    def _save_checked_log(self, path, checked_set):
+        """Persist the set of checked issue numbers to disk."""
+        from pathlib import Path
+        import json as _json
+        from datetime import datetime as _dt
+
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        data = {
+            "checked": sorted(checked_set),
+            "count": len(checked_set),
+            "last_updated": _dt.now().isoformat(),
+        }
+        with open(path, "w") as f:
+            _json.dump(data, f)
 
     def _incremental_save(self, pairs, save_path, owner, name):
         """Save current pairs to disk incrementally."""

@@ -89,6 +89,9 @@ def step_collect(config: dict):
                 if r.get("passes_all"):
                     valid_repos.add(r["repo"])
 
+    checked_dir = get_data_dir() / "raw" / "checked"
+    checked_dir.mkdir(parents=True, exist_ok=True)
+
     for repo in config["repositories"]:
         repo_full = f"{repo['owner']}/{repo['name']}"
         if valid_repos and repo_full not in valid_repos:
@@ -110,12 +113,16 @@ def step_collect(config: dict):
             repo_existing = existing_df[existing_df["repo"] == repo_full]
             skip_numbers = set(repo_existing["issue_number"].tolist())
 
+        # Per-repo checked log (tracks all evaluated issues, valid or not)
+        checked_log_path = checked_dir / f"{repo['owner']}_{repo['name']}_checked.json"
+
         logger.info(f"Have {existing_for_repo} pairs for {repo_full}, collecting {remaining} more")
         pairs = miner.mine_issue_pr_pairs(
             repo["owner"], repo["name"],
             max_pairs=remaining,
             save_path=out_path,
             skip_issue_numbers=skip_numbers,
+            checked_log_path=checked_log_path,
         )
         all_pairs.extend(pairs)
 
