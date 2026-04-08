@@ -1,0 +1,70 @@
+# Jamel's collection config — mines vscode + kubernetes
+# Inherits all defaults except the repository list
+
+repositories:
+  - owner: microsoft
+    name: vscode
+  - owner: kubernetes
+    name: kubernetes
+
+filtering:
+  min_closed_issues_with_prs: 1000
+  min_years_active: 3
+  min_contributors: 10
+  min_description_length: 50
+  max_duration_days: 90
+  min_duration_hours: 1
+  require_linked_pr: true
+  require_merged_pr: true
+  exclude_labels:
+    - "duplicate"
+    - "wontfix"
+    - "invalid"
+    - "question"
+  target_sample_size: 500
+
+pca:
+  n_components: 50
+
+nlp:
+  model_name: "microsoft/codebert-base"
+  embedding_dim: 768
+  max_token_length: 512
+  batch_size: 32
+
+repo_features:
+  churn_lookback_days: 90
+  coupling_min_support: 3
+  tfidf_max_features: 5000
+
+modeling:
+  random_seed: 42
+  cv_folds: 5
+  test_size: 0.2
+  xgboost:
+    n_estimators: 500
+    max_depth: 6
+    learning_rate: 0.1
+    subsample: 0.8
+    colsample_bytree: 0.8
+    reg_alpha: 0.1
+    reg_lambda: 1.0
+  bayes_opt:
+    n_calls: 50
+    n_random_starts: 10
+
+metrics:
+  - mae
+  - mdae
+  - mre
+  - pred_25
+  - pred_50
+  - r2
+  - sa
+
+statistics:
+  wilcoxon_alpha: 0.05
+  cliff_delta_thresholds:
+    negligible: 0.147
+    small: 0.33
+    medium: 0.474

@@ -152,6 +152,76 @@ def step_collect(config: dict):
     return df
 
 
+def step_merge_data(config: dict, merge_path: str = None):
+    """Merge another collector's dataset into your own.
+
+    Loads the other dataset (parquet or CSV), concatenates with your existing
+    data, deduplicates by repo+issue_number, and saves back to the main file.
+
+    Usage:
+        python -m src.pipeline --step merge_data --merge-from path/to/other_data.parquet
+    """
+    from pathlib import Path
+
+    if not merge_path:
+        raise ValueError("merge_data requires --merge-from <path>")
+
+    merge_path = Path(merge_path)
+    if not merge_path.exists():
+        raise FileNotFoundError(f"Merge file not found: {merge_path}")
+
+    # Load partner's data
+    if merge_path.suffix == ".parquet":
+        partner_df = pd.read_parquet(merge_path)
+    elif merge_path.suffix == ".csv":
+        partner_df = pd.read_csv(merge_path)
+    else:
+        raise ValueError(f"Unsupported file format: {merge_path.suffix}")
+
+    logger.info(f"Loaded {len(partner_df)} pairs from {merge_path}")
+
+    # Show breakdown by repo
+    logger.info("Partner data by repo:")
+    for repo, count in partner_df["repo"].value_counts().items():
+        logger.info(f"  {repo}: {count}")
+
+    # Load existing data (if any)
+    out_path = get_data_dir() / "raw" / "issue_pr_pairs.parquet"
+    try:
+        existing_df = _load_raw_data()
+        logger.info(f"Loaded {len(existing_df)} existing pairs")
+    except FileNotFoundError:
+        existing_df = None
+        logger.info("No existing dataset, partner data will become the new dataset")
+
+    # Merge with dedup
+    if existing_df is not None:
+        combined = pd.concat([existing_df, partner_df], ignore_index=True)
+        before = len(combined)
+        combined = combined.drop_duplicates(subset=["repo", "issue_number"], keep="first")
+        after = len(combined)
+        logger.info(f"Merged: {len(existing_df)} existing + {len(partner_df)} partner = {before}")
+        logger.info(f"After dedup: {after} unique pairs (removed {before - after} duplicates)")
+    else:
+        combined = partner_df
+
+    # Save
+    try:
+        combined.to_parquet(out_path, index=False)
+        saved_path = out_path
+    except ImportError:
+        saved_path = out_path.with_suffix(".csv")
+        combined.to_csv(saved_path, index=False)
+
+    logger.info(f"{'='*60}")
+    logger.info(f"Merge complete: {len(combined)} total pairs saved to {saved_path}")
+    logger.info("Combined data by repo:")
+    for repo, count in combined["repo"].value_counts().items():
+        logger.info(f"  {repo}: {count}")
+    logger.info(f"{'='*60}")
+    return combined
+
+
 def _load_raw_data():
     """Load the raw issue-PR pairs dataset (parquet or CSV)."""
     data_dir = get_data_dir()
@@ -366,12 +436,17 @@ def main():
     parser = argparse.ArgumentParser(description="SE3M Replication Study Pipeline")
     parser.add_argument(
         "--step",
-        choices=["validate", "collect", "features", "nlp_features", "repo_features",
-                 "train_model_a", "train", "analyze", "all"],
+        choices=["validate", "collect", "merge_data", "features", "nlp_features",
+                 "repo_features", "train_model_a", "train", "analyze", "all"],
         required=True,
         help="Pipeline step to run",
     )
     parser.add_argument("--config", default=None, help="Path to config YAML")
+    parser.add_argument(
+        "--merge-from",
+        default=None,
+        help="Path to partner's parquet/csv file (for merge_data step)",
+    )
     args = parser.parse_args()
 
     config = load_config(args.config)
@@ -379,6 +454,7 @@ def main():
     steps = {
         "validate": step_validate,
         "collect": step_collect,
+        "merge_data": lambda c: step_merge_data(c, merge_path=args.merge_from),
         "features": step_features,
         "nlp_features": step_nlp_features,
         "repo_features": step_repo_features,
@@ -389,6 +465,8 @@ def main():
 
     if args.step == "all":
         for name, func in steps.items():
+            if name == "merge_data":
+                continue
             logger.info(f"\n{'='*60}\nRunning step: {name}\n{'='*60}")
             func(config)
     else:
