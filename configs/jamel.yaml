@@ -1,11 +1,19 @@
-# Jamel's collection config — mines vscode + kubernetes
-# Inherits all defaults except the repository list
+# Jamel's collection config — 6 repos × 500 = 3,000 target pairs
+# Diverse mix of languages and domains for generalization
 
 repositories:
   - owner: microsoft
     name: vscode
   - owner: kubernetes
     name: kubernetes
+  - owner: facebook
+    name: react
+  - owner: golang
+    name: go
+  - owner: rust-lang
+    name: rust
+  - owner: microsoft
+    name: TypeScript
 
 filtering:
   min_closed_issues_with_prs: 1000
