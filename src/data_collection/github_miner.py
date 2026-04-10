@@ -329,9 +329,9 @@ class GitHubMiner:
         )
 
     def _find_linked_pr(self, repo, issue):
-        """Find a merged PR linked to an issue via timeline events."""
+        """Find a merged PR linked to an issue via timeline events or search fallback."""
+        # Try 1: Timeline events (cross-references and close-via-commit)
         try:
-            # Use timeline API to find cross-reference events
             events = issue.get_timeline()
             for event in events:
                 if event.event == "cross-referenced" and event.source:
@@ -342,17 +342,35 @@ class GitHubMiner:
                             return pr
 
                 elif event.event == "closed" and event.commit_id:
-                    # Issue closed via commit — find the PR containing that commit
                     try:
                         commit = repo.get_commit(event.commit_id)
                         for pr in commit.get_pulls():
                             if pr.merged:
                                 return pr
+                    except RateLimitExceededException:
+                        raise
                     except Exception:
                         continue
 
+        except RateLimitExceededException:
+            raise
         except Exception as e:
             logger.debug(f"Timeline lookup failed for #{issue.number}: {e}")
+
+        # Try 2: Search for merged PRs that reference this issue number.
+        # This catches links that the timeline API misses (common on older issues).
+        try:
+            results = self.gh.search_issues(
+                f"repo:{repo.full_name} is:pr is:merged #{issue.number}"
+            )
+            for result in results:
+                pr = repo.get_pull(result.number)
+                if pr.merged:
+                    return pr
+        except RateLimitExceededException:
+            raise
+        except Exception as e:
+            logger.debug(f"Search fallback failed for #{issue.number}: {e}")
 
         return None
 
