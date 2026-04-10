@@ -89,9 +89,13 @@ class GitHubMiner:
         return results
 
     def _handle_rate_limit(self):
-        """Wait for GitHub API rate limit reset."""
+        """Wait for GitHub API rate limit reset (core or search)."""
         rate_limit = self.gh.get_rate_limit()
-        reset_time = rate_limit.core.reset
+        # Use whichever limit is actually exhausted
+        if rate_limit.search.remaining == 0:
+            reset_time = rate_limit.search.reset
+        else:
+            reset_time = rate_limit.core.reset
         wait_seconds = (reset_time - datetime.utcnow()).total_seconds() + 10
         if wait_seconds > 0:
             logger.warning(f"Rate limit hit. Waiting {wait_seconds:.0f}s until reset.")
@@ -151,8 +155,11 @@ class GitHubMiner:
             logger.info(f"  Skipping {len(skip_issue_numbers)} previously-seen issues")
         logger.info(f"{'='*60}")
 
-        # Get closed issues, sorted by most recently updated
-        issues = repo.get_issues(state="closed", sort="updated", direction="desc")
+        # Use search API to get only actual issues (not PRs) with linked PRs
+        issues = self.gh.search_issues(
+            query=f"repo:{owner}/{name} is:issue is:closed linked:pr",
+            sort="updated", order="desc",
+        )
 
         for issue in issues:
             if len(pairs) >= max_pairs:
