@@ -72,25 +72,35 @@ class RepoFeatureExtractor:
         file_first_seen = {}
         file_last_modified = {}
 
+        skipped_commits = 0
         for commit in Repository(self.repo_path, since=since).traverse_commits():
-            changed_files = [m.new_path or m.old_path for m in commit.modified_files]
+            try:
+                modified = commit.modified_files
+                changed_files = [m.new_path or m.old_path for m in modified]
 
-            # Record co-changes
-            for i, f1 in enumerate(changed_files):
-                for f2 in changed_files[i + 1 :]:
-                    co_changes[f1][f2] += 1
-                    co_changes[f2][f1] += 1
+                # Record co-changes
+                for i, f1 in enumerate(changed_files):
+                    for f2 in changed_files[i + 1 :]:
+                        co_changes[f1][f2] += 1
+                        co_changes[f2][f1] += 1
 
-            # Record churn per file
-            for mod in commit.modified_files:
-                path = mod.new_path or mod.old_path
-                churn_data[path]["added"] += mod.added_lines
-                churn_data[path]["deleted"] += mod.deleted_lines
-                churn_data[path]["commits"] += 1
+                # Record churn per file
+                for mod in modified:
+                    path = mod.new_path or mod.old_path
+                    churn_data[path]["added"] += mod.added_lines
+                    churn_data[path]["deleted"] += mod.deleted_lines
+                    churn_data[path]["commits"] += 1
 
-                if path not in file_first_seen:
-                    file_first_seen[path] = commit.committer_date
-                file_last_modified[path] = commit.committer_date
+                    if path not in file_first_seen:
+                        file_first_seen[path] = commit.committer_date
+                    file_last_modified[path] = commit.committer_date
+            except Exception as e:
+                skipped_commits += 1
+                logger.debug(f"Skipping commit {commit.hash[:8]}: {e}")
+                continue
+
+        if skipped_commits:
+            logger.warning(f"Skipped {skipped_commits} commits due to git errors")
 
         self._co_changes = co_changes
         self._churn_data = churn_data
