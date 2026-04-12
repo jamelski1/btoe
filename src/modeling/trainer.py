@@ -387,7 +387,7 @@ class ModelTrainer:
             comparisons[label] = {
                 "wilcoxon_stat": float(stat),
                 "p_value": float(p_value),
-                "significant": p_value < self.config["statistics"]["wilcoxon_alpha"],
+                "significant": bool(p_value < self.config["statistics"]["wilcoxon_alpha"]),
                 "cliffs_delta": delta["delta"],
                 "effect_size": delta["interpretation"],
             }
