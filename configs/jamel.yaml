@@ -1,15 +1,11 @@
-# Jamel's collection config — 6 repos × 500 = 3,000 target pairs
-# Diverse mix of languages and domains for generalization
+# Jamel's collection config — 4 repos × 1,000 = 4,000 target pairs
+# Pair with mansi.yaml for full 8-repo dataset (no overlap)
 
 repositories:
   - owner: microsoft
     name: vscode
   - owner: kubernetes
     name: kubernetes
-  - owner: facebook
-    name: react
-  - owner: golang
-    name: go
   - owner: rust-lang
     name: rust
   - owner: microsoft
@@ -29,7 +25,7 @@ filtering:
     - "wontfix"
     - "invalid"
     - "question"
-  target_sample_size: 500
+  target_sample_size: 1000
 
 pca:
   n_components: 50
