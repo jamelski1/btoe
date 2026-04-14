@@ -303,17 +303,45 @@ def step_repo_features(config: dict):
     cloner = RepoCloner()
     all_repo_features = []
 
+    # Per-repo caching: save each repo's features separately so
+    # if the process is interrupted, completed repos don't have to be redone
+    per_repo_dir = data_dir / "processed" / "repo_features_by_repo"
+    per_repo_dir.mkdir(parents=True, exist_ok=True)
+
     for repo in config["repositories"]:
-        repo_path = cloner.clone_or_update(repo["owner"], repo["name"])
-        repo_df = df[df["repo"] == f"{repo['owner']}/{repo['name']}"]
+        repo_full = f"{repo['owner']}/{repo['name']}"
+        repo_df = df[df["repo"] == repo_full]
 
         if len(repo_df) == 0:
-            logger.info(f"  No pairs for {repo['owner']}/{repo['name']}, skipping")
+            logger.info(f"  No pairs for {repo_full}, skipping")
             continue
 
-        logger.info(f"  Extracting features for {len(repo_df)} pairs from {repo['owner']}/{repo['name']}...")
+        # Check if this repo is already done
+        per_repo_path = per_repo_dir / f"{repo['owner']}_{repo['name']}.parquet"
+        if per_repo_path.exists():
+            try:
+                cached = pd.read_parquet(per_repo_path)
+                if len(cached) == len(repo_df):
+                    logger.info(f"  {repo_full}: found cached features ({len(cached)} rows), skipping")
+                    all_repo_features.append(cached)
+                    continue
+                else:
+                    logger.info(f"  {repo_full}: cached has {len(cached)} rows but need {len(repo_df)}, recomputing")
+            except Exception as e:
+                logger.warning(f"  {repo_full}: failed to load cache: {e}")
+
+        repo_path = cloner.clone_or_update(repo["owner"], repo["name"])
+        logger.info(f"  Extracting features for {len(repo_df)} pairs from {repo_full}...")
         extractor = RepoFeatureExtractor(repo_path, config)
         features = extractor.extract_all_features(repo_df)
+
+        # Save this repo's features immediately (checkpoint)
+        try:
+            features.to_parquet(per_repo_path, index=False)
+            logger.info(f"  Saved {repo_full} features to {per_repo_path}")
+        except Exception as e:
+            logger.warning(f"  Could not save checkpoint: {e}")
+
         all_repo_features.append(features)
 
     repo_features = pd.concat(all_repo_features)
