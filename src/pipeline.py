@@ -310,41 +310,82 @@ def step_repo_features(config: dict):
 
     for repo in config["repositories"]:
         repo_full = f"{repo['owner']}/{repo['name']}"
-        repo_df = df[df["repo"] == repo_full]
+        repo_df = df[df["repo"] == repo_full].copy()
 
         if len(repo_df) == 0:
             logger.info(f"  No pairs for {repo_full}, skipping")
             continue
 
-        # Check if this repo is already done
         per_repo_path = per_repo_dir / f"{repo['owner']}_{repo['name']}.parquet"
+        cached_features = None
+        cached_issue_numbers = set()
+
+        # Load existing cached features if any
         if per_repo_path.exists():
             try:
-                cached = pd.read_parquet(per_repo_path)
-                if len(cached) == len(repo_df):
-                    logger.info(f"  {repo_full}: found cached features ({len(cached)} rows), skipping")
-                    all_repo_features.append(cached)
-                    continue
+                cached_features = pd.read_parquet(per_repo_path)
+                if "issue_number" in cached_features.columns:
+                    cached_issue_numbers = set(cached_features["issue_number"].tolist())
+                    logger.info(f"  {repo_full}: found cache with {len(cached_features)} rows "
+                                f"({len(cached_issue_numbers)} unique issues)")
                 else:
-                    logger.info(f"  {repo_full}: cached has {len(cached)} rows but need {len(repo_df)}, recomputing")
+                    # Old cache format without issue_number — invalidate it
+                    logger.warning(f"  {repo_full}: old cache format, will recompute")
+                    cached_features = None
             except Exception as e:
                 logger.warning(f"  {repo_full}: failed to load cache: {e}")
+                cached_features = None
+
+        # Figure out which pairs need new features
+        missing_df = repo_df[~repo_df["issue_number"].isin(cached_issue_numbers)]
+
+        if len(missing_df) == 0:
+            logger.info(f"  {repo_full}: all {len(repo_df)} pairs already have cached features, skipping")
+            # Keep only the rows we need from the cache
+            relevant = cached_features[cached_features["issue_number"].isin(repo_df["issue_number"])]
+            all_repo_features.append(relevant)
+            continue
+
+        logger.info(f"  {repo_full}: need features for {len(missing_df)} new pairs "
+                    f"(out of {len(repo_df)} total)")
 
         repo_path = cloner.clone_or_update(repo["owner"], repo["name"])
-        logger.info(f"  Extracting features for {len(repo_df)} pairs from {repo_full}...")
         extractor = RepoFeatureExtractor(repo_path, config)
-        features = extractor.extract_all_features(repo_df)
+        new_features = extractor.extract_all_features(missing_df)
 
-        # Save this repo's features immediately (checkpoint)
+        # Attach issue_number so we can dedup / lookup later
+        new_features = new_features.reset_index(drop=True)
+        new_features.insert(0, "issue_number", missing_df["issue_number"].values)
+
+        # Merge with existing cache
+        if cached_features is not None and len(cached_features) > 0:
+            combined = pd.concat([cached_features, new_features], ignore_index=True)
+            combined = combined.drop_duplicates(subset=["issue_number"], keep="last")
+        else:
+            combined = new_features
+
+        # Save updated cache
         try:
-            features.to_parquet(per_repo_path, index=False)
-            logger.info(f"  Saved {repo_full} features to {per_repo_path}")
+            combined.to_parquet(per_repo_path, index=False)
+            logger.info(f"  Saved {repo_full} features to {per_repo_path} ({len(combined)} rows)")
         except Exception as e:
             logger.warning(f"  Could not save checkpoint: {e}")
 
-        all_repo_features.append(features)
+        # Only keep rows relevant to the current dataset, tag with repo
+        relevant = combined[combined["issue_number"].isin(repo_df["issue_number"])].copy()
+        relevant["repo"] = repo_full
+        all_repo_features.append(relevant)
 
-    repo_features = pd.concat(all_repo_features)
+    # Combine all repos; align with main df order via merge
+    raw_features = pd.concat(all_repo_features, ignore_index=True)
+
+    # Merge on (repo, issue_number) to preserve the order of df
+    key_df = df[["repo", "issue_number"]].copy()
+    repo_features = key_df.merge(
+        raw_features, on=["repo", "issue_number"], how="left"
+    )
+    # Drop the key columns so feature matrix only has numeric features
+    repo_features = repo_features.drop(columns=["repo", "issue_number"])
 
     out_path = data_dir / "processed" / "repo_features.parquet"
     _save_features(repo_features, out_path)
