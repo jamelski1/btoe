@@ -41,20 +41,29 @@ class RepoFeatureExtractor:
         Returns:
             DataFrame with repository feature columns
         """
+        import time as _time
+
         logger.info(f"Extracting repo features for {len(df)} pairs")
 
         # Pre-compute repository-wide caches
+        cache_start = _time.time()
         self._build_caches(df)
+        logger.info(f"  Cache build took {_time.time() - cache_start:.1f}s")
 
+        logger.info(f"  Computing features for {len(df)} pairs...")
         features = pd.DataFrame(index=df.index)
 
-        for idx, row in df.iterrows():
+        pair_start = _time.time()
+        for i, (idx, row) in enumerate(df.iterrows()):
             files = row["pr_files_changed"].split("|") if row["pr_files_changed"] else []
             as_of_date = row["issue_created_at"]
 
             row_features = self._extract_for_pair(files, as_of_date)
             for key, value in row_features.items():
                 features.loc[idx, key] = value
+
+            if (i + 1) % 50 == 0 or (i + 1) == len(df):
+                logger.info(f"    Processed {i + 1}/{len(df)} pairs ({_time.time() - pair_start:.0f}s)")
 
         return features
 
@@ -72,6 +81,30 @@ class RepoFeatureExtractor:
         file_first_seen = {}
         file_last_modified = {}
 
+        commit_count = 0
+        for commit in Repository(self.repo_path, since=since).traverse_commits():
+            commit_count += 1
+            if commit_count % 500 == 0:
+                logger.info(f"    Processed {commit_count} commits ({len(churn_data)} files tracked so far)")
+
+            changed_files = [m.new_path or m.old_path for m in commit.modified_files]
+
+            # Record co-changes
+            for i, f1 in enumerate(changed_files):
+                for f2 in changed_files[i + 1 :]:
+                    co_changes[f1][f2] += 1
+                    co_changes[f2][f1] += 1
+
+            # Record churn per file
+            for mod in commit.modified_files:
+                path = mod.new_path or mod.old_path
+                churn_data[path]["added"] += mod.added_lines
+                churn_data[path]["deleted"] += mod.deleted_lines
+                churn_data[path]["commits"] += 1
+
+                if path not in file_first_seen:
+                    file_first_seen[path] = commit.committer_date
+                file_last_modified[path] = commit.committer_date
         skipped_commits = 0
         for commit in Repository(self.repo_path, since=since).traverse_commits():
             try:
@@ -101,6 +134,8 @@ class RepoFeatureExtractor:
 
         if skipped_commits:
             logger.warning(f"Skipped {skipped_commits} commits due to git errors")
+
+        logger.info(f"    Done: traversed {commit_count} commits total")
 
         self._co_changes = co_changes
         self._churn_data = churn_data
