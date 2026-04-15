@@ -1,0 +1,35 @@
+[
+  {
+    "repo": "microsoft/vscode",
+    "total_closed_issues": 1000,
+    "contributor_count": 11,
+    "age_years": 10.6,
+    "license": "MIT",
+    "meets_issue_threshold": true,
+    "meets_contributor_threshold": true,
+    "meets_age_threshold": true,
+    "passes_all": true
+  },
+  {
+    "repo": "kubernetes/kubernetes",
+    "total_closed_issues": 1000,
+    "contributor_count": 11,
+    "age_years": 11.8,
+    "license": "Apache-2.0",
+    "meets_issue_threshold": true,
+    "meets_contributor_threshold": true,
+    "meets_age_threshold": true,
+    "passes_all": true
+  },
+  {
+    "repo": "facebook/react",
+    "total_closed_issues": 1000,
+    "contributor_count": 11,
+    "age_years": 12.9,
+    "license": "MIT",
+    "meets_issue_threshold": true,
+    "meets_contributor_threshold": true,
+    "meets_age_threshold": true,
+    "passes_all": true
+  }
+]

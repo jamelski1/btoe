@@ -1,11 +1,15 @@
-# Jamel's collection config — mines vscode + kubernetes
-# Inherits all defaults except the repository list
+# Jamel's collection config — 4 repos × 1,000 = 4,000 target pairs
+# Pair with mansi.yaml for full 8-repo dataset (no overlap)
 
 repositories:
   - owner: microsoft
     name: vscode
   - owner: kubernetes
     name: kubernetes
+  - owner: rust-lang
+    name: rust
+  - owner: microsoft
+    name: TypeScript
 
 filtering:
   min_closed_issues_with_prs: 1000
@@ -21,7 +25,7 @@ filtering:
     - "wontfix"
     - "invalid"
     - "question"
-  target_sample_size: 500
+  target_sample_size: 1000
 
 pca:
   n_components: 50

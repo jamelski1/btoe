@@ -1,11 +1,15 @@
-# Mansi's collection config — mines facebook/react + flutter
-# Inherits all defaults except the repository list
+# Mansi's collection config — 4 repos × 1,000 = 4,000 target pairs
+# Pair with jamel.yaml for full 8-repo dataset (no overlap)
 
 repositories:
   - owner: facebook
     name: react
   - owner: flutter
     name: flutter
+  - owner: django
+    name: django
+  - owner: pytorch
+    name: pytorch
 
 filtering:
   min_closed_issues_with_prs: 1000
@@ -21,7 +25,7 @@ filtering:
     - "wontfix"
     - "invalid"
     - "question"
-  target_sample_size: 500
+  target_sample_size: 1000
 
 pca:
   n_components: 50

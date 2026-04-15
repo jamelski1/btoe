@@ -89,9 +89,13 @@ class GitHubMiner:
         return results
 
     def _handle_rate_limit(self):
-        """Wait for GitHub API rate limit reset."""
+        """Wait for GitHub API rate limit reset (core or search)."""
         rate_limit = self.gh.get_rate_limit()
-        reset_time = rate_limit.core.reset
+        # Use whichever limit is actually exhausted
+        if rate_limit.search.remaining == 0:
+            reset_time = rate_limit.search.reset
+        else:
+            reset_time = rate_limit.core.reset
         wait_seconds = (reset_time - datetime.utcnow()).total_seconds() + 10
         if wait_seconds > 0:
             logger.warning(f"Rate limit hit. Waiting {wait_seconds:.0f}s until reset.")
@@ -151,57 +155,86 @@ class GitHubMiner:
             logger.info(f"  Skipping {len(skip_issue_numbers)} previously-seen issues")
         logger.info(f"{'='*60}")
 
-        # Get closed issues, sorted by most recently updated
-        issues = repo.get_issues(state="closed", sort="updated", direction="desc")
+        # Use search API to get only actual issues (not PRs) with linked PRs.
+        # GitHub search caps at 1000 results per query, so we paginate with
+        # date windows: after exhausting a batch, query for older issues.
+        base_query = f"repo:{owner}/{name} is:issue is:closed linked:pr"
+        date_cutoff = ""  # empty = no date filter on first pass
+        search_exhausted = False
 
-        for issue in issues:
-            if len(pairs) >= max_pairs:
-                break
+        while len(pairs) < max_pairs and not search_exhausted:
+            query = f"{base_query}{date_cutoff}"
+            logger.info(f"  Search query: {query}")
+            issues = self.gh.search_issues(query=query, sort="updated", order="desc")
 
-            # Skip issues we've already evaluated (saves API calls)
-            if issue.number in skip_issue_numbers:
-                issues_skipped_existing += 1
-                continue
+            batch_seen = 0
+            oldest_updated = None
 
-            issues_checked += 1
-            newly_checked.add(issue.number)
+            for issue in issues:
+                if len(pairs) >= max_pairs:
+                    break
 
-            # Progress every 25 issues checked
-            if issues_checked % 25 == 0:
-                elapsed = time.time() - start_time
-                rate = issues_checked / elapsed * 60 if elapsed > 0 else 0
-                logger.info(f"  [{owner}/{name}] Checked {issues_checked} issues -> {len(pairs)} pairs found ({elapsed:.0f}s elapsed, {rate:.1f} issues/min, {issues_skipped_existing} pre-skipped)")
+                batch_seen += 1
+                # Track the oldest updated_at to set next date window
+                if issue.updated_at:
+                    if oldest_updated is None or issue.updated_at < oldest_updated:
+                        oldest_updated = issue.updated_at
 
-                # Periodically persist the checked log so we don't lose progress
-                if checked_log_path and issues_checked % 100 == 0:
-                    self._save_checked_log(checked_log_path, checked_set | newly_checked)
-
-            try:
-                pair = self._try_extract_pair(repo, issue)
-                if pair is None:
-                    if issue.pull_request is not None:
-                        issues_skipped_pr += 1
-                    else:
-                        issues_no_link += 1
+                # Skip issues we've already evaluated (saves API calls)
+                if issue.number in skip_issue_numbers:
+                    issues_skipped_existing += 1
                     continue
 
-                if self._passes_filters(pair):
-                    pairs.append(pair)
-                    logger.info(f"  + Issue #{issue.number} -> PR #{pair.pr_number} ({pair.duration_hours:.1f}h) [{len(pairs)}/{max_pairs}]")
+                issues_checked += 1
+                newly_checked.add(issue.number)
 
-                    # Save after first match to verify saves work, then every 25
-                    if save_path and (len(pairs) == 1 or len(pairs) % 25 == 0):
-                        self._incremental_save(pairs, save_path, owner, name)
-                else:
-                    issues_filtered += 1
+                # Progress every 25 issues checked
+                if issues_checked % 25 == 0:
+                    elapsed = time.time() - start_time
+                    rate = issues_checked / elapsed * 60 if elapsed > 0 else 0
+                    logger.info(f"  [{owner}/{name}] Checked {issues_checked} issues -> {len(pairs)} pairs found ({elapsed:.0f}s elapsed, {rate:.1f} issues/min, {issues_skipped_existing} pre-skipped)")
 
-            except RateLimitExceededException:
-                logger.warning(f"  Rate limit hit after {issues_checked} issues, waiting for reset...")
-                self._handle_rate_limit()
-                logger.info(f"  Resuming...")
-            except Exception as e:
-                logger.warning(f"Error processing issue #{issue.number}: {e}")
-                continue
+                    # Periodically persist the checked log so we don't lose progress
+                    if checked_log_path and issues_checked % 100 == 0:
+                        self._save_checked_log(checked_log_path, checked_set | newly_checked)
+
+                try:
+                    pair = self._try_extract_pair(repo, issue)
+                    if pair is None:
+                        if issue.pull_request is not None:
+                            issues_skipped_pr += 1
+                        else:
+                            issues_no_link += 1
+                        continue
+
+                    if self._passes_filters(pair):
+                        pairs.append(pair)
+                        logger.info(f"  + Issue #{issue.number} -> PR #{pair.pr_number} ({pair.duration_hours:.1f}h) [{len(pairs)}/{max_pairs}]")
+
+                        # Save after first match to verify saves work, then every 25
+                        if save_path and (len(pairs) == 1 or len(pairs) % 25 == 0):
+                            self._incremental_save(pairs, save_path, owner, name)
+                    else:
+                        issues_filtered += 1
+
+                except RateLimitExceededException:
+                    logger.warning(f"  Rate limit hit after {issues_checked} issues, waiting for reset...")
+                    self._handle_rate_limit()
+                    logger.info(f"  Resuming...")
+                except Exception as e:
+                    logger.warning(f"Error processing issue #{issue.number}: {e}")
+                    continue
+
+            # If this batch returned < 1000 results, there are no more issues
+            if batch_seen < 1000:
+                search_exhausted = True
+            elif oldest_updated is not None:
+                # Move the window to before the oldest issue we saw
+                date_str = oldest_updated.strftime("%Y-%m-%dT%H:%M:%S")
+                date_cutoff = f" updated:<{date_str}"
+                logger.info(f"  Reached 1000-result cap, paging to issues updated before {date_str}")
+            else:
+                search_exhausted = True
 
         elapsed = time.time() - start_time
         logger.info(f"  Summary for {owner}/{name} (completed in {elapsed/60:.1f} min):")
@@ -296,9 +329,9 @@ class GitHubMiner:
         )
 
     def _find_linked_pr(self, repo, issue):
-        """Find a merged PR linked to an issue via timeline events."""
+        """Find a merged PR linked to an issue via timeline events or search fallback."""
+        # Try 1: Timeline events (cross-references and close-via-commit)
         try:
-            # Use timeline API to find cross-reference events
             events = issue.get_timeline()
             for event in events:
                 if event.event == "cross-referenced" and event.source:
@@ -309,17 +342,35 @@ class GitHubMiner:
                             return pr
 
                 elif event.event == "closed" and event.commit_id:
-                    # Issue closed via commit — find the PR containing that commit
                     try:
                         commit = repo.get_commit(event.commit_id)
                         for pr in commit.get_pulls():
                             if pr.merged:
                                 return pr
+                    except RateLimitExceededException:
+                        raise
                     except Exception:
                         continue
 
+        except RateLimitExceededException:
+            raise
         except Exception as e:
             logger.debug(f"Timeline lookup failed for #{issue.number}: {e}")
+
+        # Try 2: Search for merged PRs that reference this issue number.
+        # This catches links that the timeline API misses (common on older issues).
+        try:
+            results = self.gh.search_issues(
+                f"repo:{repo.full_name} is:pr is:merged #{issue.number}"
+            )
+            for result in results:
+                pr = repo.get_pull(result.number)
+                if pr.merged:
+                    return pr
+        except RateLimitExceededException:
+            raise
+        except Exception as e:
+            logger.debug(f"Search fallback failed for #{issue.number}: {e}")
 
         return None
 
