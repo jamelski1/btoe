@@ -68,12 +68,30 @@ class RepoFeatureExtractor:
         return features
 
     def _build_caches(self, df: pd.DataFrame):
-        """Pre-compute change coupling and churn data from repository history."""
+        """Pre-compute change coupling and churn data from repository history.
+
+        Memory optimization: only track co-changes for files of interest
+        (files that appear in any pair's pr_files_changed). For large repos
+        with thousands of commits, tracking every file pair would consume
+        gigabytes of memory.
+        """
         earliest_date = pd.to_datetime(df["issue_created_at"]).min()
         lookback = timedelta(days=self.repo_cfg["churn_lookback_days"])
         since = earliest_date - lookback
 
+        # Build "files of interest" set from all pairs in this batch
+        files_of_interest = set()
+        for files_str in df["pr_files_changed"].dropna():
+            if isinstance(files_str, str) and files_str:
+                files_of_interest.update(f for f in files_str.split("|") if f)
+
+        # Skip commits with too many files (mass refactors, formatting passes)
+        # — these aren't meaningful coupling signals and balloon memory usage
+        max_files_per_commit = 50
+
         logger.info(f"Building repo caches from {since} onward")
+        logger.info(f"  Tracking co-changes for {len(files_of_interest)} files of interest")
+        logger.info(f"  Skipping commits with > {max_files_per_commit} files")
 
         # Track file co-changes and churn
         co_changes = defaultdict(Counter)
@@ -82,44 +100,50 @@ class RepoFeatureExtractor:
         file_last_modified = {}
 
         commit_count = 0
+        skipped_commits = 0
+        large_commit_count = 0
+
         for commit in Repository(self.repo_path, since=since).traverse_commits():
             commit_count += 1
             if commit_count % 500 == 0:
-                logger.info(f"    Processed {commit_count} commits ({len(churn_data)} files tracked so far)")
+                logger.info(f"    Processed {commit_count} commits "
+                            f"({len(churn_data)} files tracked, "
+                            f"{sum(len(c) for c in co_changes.values())} co-change entries)")
 
-            changed_files = [m.new_path or m.old_path for m in commit.modified_files]
-
-            # Record co-changes
-            for i, f1 in enumerate(changed_files):
-                for f2 in changed_files[i + 1 :]:
-                    co_changes[f1][f2] += 1
-                    co_changes[f2][f1] += 1
-
-            # Record churn per file
-            for mod in commit.modified_files:
-                path = mod.new_path or mod.old_path
-                churn_data[path]["added"] += mod.added_lines
-                churn_data[path]["deleted"] += mod.deleted_lines
-                churn_data[path]["commits"] += 1
-
-                if path not in file_first_seen:
-                    file_first_seen[path] = commit.committer_date
-                file_last_modified[path] = commit.committer_date
-        skipped_commits = 0
-        for commit in Repository(self.repo_path, since=since).traverse_commits():
             try:
                 modified = commit.modified_files
-                changed_files = [m.new_path or m.old_path for m in modified]
+                changed_files = [m.new_path or m.old_path for m in modified
+                                 if (m.new_path or m.old_path)]
 
-                # Record co-changes
-                for i, f1 in enumerate(changed_files):
-                    for f2 in changed_files[i + 1 :]:
-                        co_changes[f1][f2] += 1
-                        co_changes[f2][f1] += 1
+                # Skip mass-change commits (refactors, formatting, license updates)
+                if len(changed_files) > max_files_per_commit:
+                    large_commit_count += 1
+                    # Still record churn for tracking, but skip co-change pairs
+                    for mod in modified:
+                        path = mod.new_path or mod.old_path
+                        if not path:
+                            continue
+                        churn_data[path]["added"] += mod.added_lines
+                        churn_data[path]["deleted"] += mod.deleted_lines
+                        churn_data[path]["commits"] += 1
+                        if path not in file_first_seen:
+                            file_first_seen[path] = commit.committer_date
+                        file_last_modified[path] = commit.committer_date
+                    continue
 
-                # Record churn per file
+                # Record co-changes — but only when at least one file is "of interest"
+                interesting = [f for f in changed_files if f in files_of_interest]
+                if interesting:
+                    for f1 in interesting:
+                        for f2 in changed_files:
+                            if f1 != f2:
+                                co_changes[f1][f2] += 1
+
+                # Record churn per file (always)
                 for mod in modified:
                     path = mod.new_path or mod.old_path
+                    if not path:
+                        continue
                     churn_data[path]["added"] += mod.added_lines
                     churn_data[path]["deleted"] += mod.deleted_lines
                     churn_data[path]["commits"] += 1
@@ -127,6 +151,7 @@ class RepoFeatureExtractor:
                     if path not in file_first_seen:
                         file_first_seen[path] = commit.committer_date
                     file_last_modified[path] = commit.committer_date
+
             except Exception as e:
                 skipped_commits += 1
                 logger.debug(f"Skipping commit {commit.hash[:8]}: {e}")
@@ -134,6 +159,9 @@ class RepoFeatureExtractor:
 
         if skipped_commits:
             logger.warning(f"Skipped {skipped_commits} commits due to git errors")
+        if large_commit_count:
+            logger.info(f"  {large_commit_count} commits had > {max_files_per_commit} files "
+                        f"(churn recorded, co-changes skipped)")
 
         logger.info(f"    Done: traversed {commit_count} commits total")
 
@@ -142,7 +170,8 @@ class RepoFeatureExtractor:
         self._file_first_seen = file_first_seen
         self._file_last_modified = file_last_modified
 
-        logger.info(f"Cache built: {len(churn_data)} files tracked")
+        logger.info(f"Cache built: {len(churn_data)} files tracked, "
+                    f"{sum(len(c) for c in co_changes.values())} co-change entries")
 
     def _extract_for_pair(self, files: list[str], as_of_date) -> dict:
         """Extract features for a single issue-PR pair."""
