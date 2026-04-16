@@ -236,9 +236,15 @@
     </div>
 
     <div class="field">
+      <label>GitHub Repository <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px">(optional)</span></label>
+      <input id="f-repo" type="text" placeholder="https://github.com/owner/repo">
+      <small>Enables real PyDriller features for Models B &amp; C (churn, coupling, file age). First request clones the repo.</small>
+    </div>
+
+    <div class="field">
       <label>Files Changed <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px">(optional)</span></label>
       <input id="f-files" type="text" placeholder="src/pool.py, tests/test_pool.py">
-      <small>Comma-separated file paths. Improves Model B &amp; C estimates.</small>
+      <small>Comma-separated file paths. Used with repo URL for structural features.</small>
     </div>
 
     <button class="btn-primary" id="btn-run" onclick="runEstimate()">Estimate Duration</button>
@@ -279,7 +285,7 @@
         </div>
       </div>
       <div class="metrics" id="metrics-b"></div>
-      <p class="card-note">Git history features (churn, coupling, file age) require a cloned repo and are zeroed here. Only file count is used — this estimate has lower accuracy than batch mode.</p>
+      <p class="card-note">Provide a GitHub repo URL above to enable real PyDriller features. Without it, only file count is used.</p>
     </div>
 
     <!-- Model C -->
@@ -297,6 +303,7 @@
         </div>
       </div>
       <div class="metrics" id="metrics-c"></div>
+      <p class="card-note">Provide a GitHub repo URL above to enable real PyDriller features. Without it, only file count is used.</p>
     </div>
 
   </div>
@@ -315,9 +322,10 @@ window.addEventListener('DOMContentLoaded', () => {
 
 // ── Run estimate ───────────────────────────────────────────────── //
 async function runEstimate() {
-  const title = document.getElementById('f-title').value.trim();
-  const body  = document.getElementById('f-body').value.trim();
-  const files = document.getElementById('f-files').value.trim();
+  const title    = document.getElementById('f-title').value.trim();
+  const body     = document.getElementById('f-body').value.trim();
+  const files    = document.getElementById('f-files').value.trim();
+  const repo_url = document.getElementById('f-repo').value.trim();
 
   if (!title && !body) {
     alert('Please enter an issue title or body.');
@@ -326,7 +334,7 @@ async function runEstimate() {
 
   const btn = document.getElementById('btn-run');
   btn.disabled = true;
-  btn.textContent = 'Computing…';
+  btn.textContent = repo_url ? 'Cloning repo & computing…' : 'Computing…';
 
   ['a','b','c'].forEach(m => {
     setPill(m, 'running', true);
@@ -339,7 +347,7 @@ async function runEstimate() {
     const resp = await fetch('/predict', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, body, files }),
+      body: JSON.stringify({ title, body, files, repo_url }),
     });
     const data = await resp.json();
 
@@ -355,6 +363,16 @@ async function runEstimate() {
         setResult(m, label, unit, raw);
         document.getElementById(`card-${m}`).classList.add('ready');
         renderMetrics(m, r.metrics || {});
+
+        // Update note for B/C based on whether real repo features were used
+        if ((m === 'b' || m === 'c') && r.has_repo !== undefined) {
+          const noteEl = document.querySelector(`#card-${m} .card-note`);
+          if (noteEl) {
+            noteEl.textContent = r.has_repo
+              ? 'Real repo features extracted via PyDriller (churn, coupling, file age, change impact).'
+              : 'Git history features require a repo URL. Only file count is used — provide a GitHub repo URL for full accuracy.';
+          }
+        }
       }
     });
   } catch (err) {

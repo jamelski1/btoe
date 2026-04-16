@@ -5,14 +5,15 @@ Supports three model variants:
   Model B  repo-only      Repository structural features (PyDriller)
   Model C  combined       NLP + repo features
 
-For single-text inference, git history features (churn, coupling, file age)
-cannot be computed without a cloned repository.  Model B and C accept a list
-of changed file paths and zero-pad the missing history features; accuracy is
-therefore lower than batch training but still useful for quick estimates.
+When a GitHub repo URL is provided, PyDriller extracts real structural
+features (churn, coupling, file age) from the cloned repository.
+Without a repo URL, git history features are zero-padded and only
+num_files is used for Models B and C.
 """
 
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
 
 import joblib
@@ -201,20 +202,73 @@ class ModelPredictor:
         features = self._apply_pca(features, bundle)
         return self._predict(features, "a")
 
+    def _extract_repo_features(
+        self, repo_url: str, files: list[str]
+    ) -> tuple[pd.DataFrame, bool]:
+        """Extract real repo features from a cloned repository.
+
+        Returns (features_df, used_real_features). If cloning or PyDriller
+        fails, falls back to zero-padded features.
+        """
+        from src.data_collection.repo_cloner import RepoCloner
+        from src.feature_extraction.repo_features import RepoFeatureExtractor
+
+        if not repo_url:
+            row = {col: 0.0 for col in REPO_FEATURE_COLS}
+            row["num_files"] = float(len(files))
+            return pd.DataFrame([row]), False
+
+        # Parse owner/name from URL
+        # Handles: https://github.com/owner/name, github.com/owner/name, owner/name
+        repo_url = repo_url.strip().rstrip("/")
+        if "github.com" in repo_url:
+            parts = repo_url.split("github.com/")[-1].split("/")
+        else:
+            parts = repo_url.split("/")
+
+        if len(parts) < 2:
+            logger.warning(f"Could not parse repo URL: {repo_url}")
+            row = {col: 0.0 for col in REPO_FEATURE_COLS}
+            row["num_files"] = float(len(files))
+            return pd.DataFrame([row]), False
+
+        owner, name = parts[0], parts[1].replace(".git", "")
+
+        try:
+            logger.info(f"Cloning/updating {owner}/{name} for feature extraction...")
+            cloner = RepoCloner()
+            repo_path = cloner.clone_or_update(owner, name)
+
+            # Build a minimal DataFrame that RepoFeatureExtractor expects
+            dummy_df = pd.DataFrame([{
+                "issue_created_at": datetime.now().isoformat(),
+                "pr_files_changed": "|".join(files) if files else "",
+            }])
+
+            extractor = RepoFeatureExtractor(str(repo_path), self.config)
+            features = extractor.extract_all_features(dummy_df)
+            logger.info(f"Extracted real repo features from {owner}/{name}")
+            return features, True
+
+        except Exception as e:
+            logger.warning(f"PyDriller extraction failed for {repo_url}: {e}")
+            row = {col: 0.0 for col in REPO_FEATURE_COLS}
+            row["num_files"] = float(len(files))
+            return pd.DataFrame([row]), False
+
     def predict_repo_only(
-        self, files: list[str]
+        self, files: list[str], repo_url: str = ""
     ) -> tuple[float | None, str | None]:
         """Model B — repo-only prediction.
 
-        Git history features are zeroed out because they require a cloned
-        repository; only *num_files* carries information here.
+        When repo_url is provided, clones the repo and extracts real
+        structural features via PyDriller. Otherwise zero-pads history
+        features and uses only num_files.
         """
         bundle = self._load("b")
         if bundle is None:
             return None, "Model not trained yet"
-        row = {col: 0.0 for col in REPO_FEATURE_COLS}
-        row["num_files"] = float(len(files))
-        features = pd.DataFrame([row])
+        features, used_real = self._extract_repo_features(repo_url, files)
         return self._predict(features, "b")
 
     def predict_combined(
@@ -224,6 +278,7 @@ class ModelPredictor:
         pr_title: str = "",
         pr_body: str = "",
         files: list[str] = None,
+        repo_url: str = "",
     ) -> tuple[float | None, str | None]:
         """Model C — combined NLP + repo features."""
         bundle = self._load("c")
@@ -234,9 +289,7 @@ class ModelPredictor:
         nlp = self._extract_nlp(issue_title, issue_body, pr_title, pr_body)
         nlp = self._apply_pca(nlp, bundle)
 
-        repo_row = {col: 0.0 for col in REPO_FEATURE_COLS}
-        repo_row["num_files"] = float(len(files))
-        repo_df = pd.DataFrame([repo_row])
+        repo_df, used_real = self._extract_repo_features(repo_url, files)
 
         features = pd.concat(
             [nlp.reset_index(drop=True), repo_df.reset_index(drop=True)], axis=1
