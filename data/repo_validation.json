@@ -22,11 +22,22 @@
     "passes_all": true
   },
   {
-    "repo": "facebook/react",
+    "repo": "rust-lang/rust",
     "total_closed_issues": 1000,
     "contributor_count": 11,
-    "age_years": 12.9,
-    "license": "MIT",
+    "age_years": 15.8,
+    "license": "Apache-2.0",
+    "meets_issue_threshold": true,
+    "meets_contributor_threshold": true,
+    "meets_age_threshold": true,
+    "passes_all": true
+  },
+  {
+    "repo": "microsoft/TypeScript",
+    "total_closed_issues": 1000,
+    "contributor_count": 11,
+    "age_years": 11.8,
+    "license": "Apache-2.0",
     "meets_issue_threshold": true,
     "meets_contributor_threshold": true,
     "meets_age_threshold": true,
