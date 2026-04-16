@@ -632,6 +632,168 @@ def step_encoder_ablation(config: dict, encoders: list = None):
     logger.info(f"Total time: {(_time.time() - start)/60:.1f} min")
 
 
+def step_sensitivity(config: dict):
+    """Sensitivity analysis: train Models A, B, C at multiple duration thresholds.
+
+    Tests robustness of findings across different max_duration_days caps.
+    Prints a comparison table and runs Wilcoxon tests at each threshold
+    to see whether the A vs C significance conclusion changes.
+    """
+    import copy
+    import time as _time
+    from scipy import stats
+    from src.modeling.trainer import ModelTrainer
+
+    thresholds_days = [14, 30, 60, 90, None]  # None = no cap
+    start = _time.time()
+
+    df_full = _load_raw_data()
+    min_hours = config["filtering"]["min_duration_hours"]
+
+    # We need NLP and repo features for all models
+    nlp_all = _load_features("nlp_features")
+    try:
+        repo_all = _load_features("repo_features")
+        has_repo = True
+    except FileNotFoundError:
+        repo_all = None
+        has_repo = False
+        logger.warning("Repo features not found — will only run Model A sensitivity")
+
+    logger.info(f"{'='*90}")
+    logger.info(f"SENSITIVITY ANALYSIS — {len(thresholds_days)} duration thresholds")
+    logger.info(f"{'='*90}")
+
+    rows = []
+
+    for cap_days in thresholds_days:
+        cap_label = f"{cap_days}d" if cap_days else "no cap"
+        max_hours = cap_days * 24 if cap_days else float("inf")
+
+        # Apply filter
+        mask = (df_full["duration_hours"] >= min_hours)
+        if cap_days:
+            mask = mask & (df_full["duration_hours"] <= max_hours)
+        df = df_full[mask].reset_index(drop=True)
+        nlp = nlp_all[mask].reset_index(drop=True)
+        y = df["duration_hours"]
+
+        n = len(df)
+        logger.info(f"\n--- Threshold: {cap_label} ({n} samples) ---")
+
+        if n < 50:
+            logger.warning(f"  Too few samples ({n}), skipping")
+            continue
+
+        cfg = copy.deepcopy(config)
+        trainer = ModelTrainer(cfg)
+
+        # Model A
+        result_a = trainer.train_and_evaluate(nlp, y, f"sensitivity_a_{cap_label}")
+        row = {
+            "threshold": cap_label,
+            "n_samples": n,
+            "a_mae": result_a.test_metrics["mae"],
+            "a_mdae": result_a.test_metrics["mdae"],
+            "a_sa": result_a.test_metrics["sa"],
+            "a_r2": result_a.test_metrics["r2"],
+            "a_pred25": result_a.test_metrics["pred_25"],
+        }
+
+        if has_repo:
+            repo = repo_all[mask].reset_index(drop=True)
+
+            # Model B
+            result_b = trainer.train_and_evaluate(repo, y, f"sensitivity_b_{cap_label}")
+            row["b_mae"] = result_b.test_metrics["mae"]
+            row["b_sa"] = result_b.test_metrics["sa"]
+            row["b_r2"] = result_b.test_metrics["r2"]
+
+            # Model C
+            combined = pd.concat([nlp, repo], axis=1)
+            result_c = trainer.train_and_evaluate(combined, y, f"sensitivity_c_{cap_label}")
+            row["c_mae"] = result_c.test_metrics["mae"]
+            row["c_sa"] = result_c.test_metrics["sa"]
+            row["c_r2"] = result_c.test_metrics["r2"]
+            row["c_pred25"] = result_c.test_metrics["pred_25"]
+
+            # Wilcoxon A vs C
+            errors_a = np.abs(result_a.test_actuals - result_a.test_predictions)
+            errors_c = np.abs(result_c.test_actuals - result_c.test_predictions)
+            try:
+                _, p_ac = stats.wilcoxon(errors_a, errors_c)
+                row["a_vs_c_p"] = p_ac
+                row["a_vs_c_sig"] = "YES" if p_ac < 0.05 else "no"
+            except Exception:
+                row["a_vs_c_p"] = None
+                row["a_vs_c_sig"] = "err"
+
+            # Wilcoxon A vs B
+            errors_b = np.abs(result_b.test_actuals - result_b.test_predictions)
+            try:
+                _, p_ab = stats.wilcoxon(errors_a, errors_b)
+                row["a_vs_b_p"] = p_ab
+                row["a_vs_b_sig"] = "YES" if p_ab < 0.05 else "no"
+            except Exception:
+                row["a_vs_b_p"] = None
+                row["a_vs_b_sig"] = "err"
+
+        rows.append(row)
+
+    # Print summary table
+    print()
+    print("=" * 100)
+    print("SENSITIVITY ANALYSIS RESULTS")
+    print("=" * 100)
+
+    if has_repo:
+        header = (f"{'Threshold':<10} {'N':>6}  "
+                  f"{'A MAE':>8} {'A SA':>7} {'A P25':>7}  "
+                  f"{'B MAE':>8} {'B SA':>7}  "
+                  f"{'C MAE':>8} {'C SA':>7} {'C P25':>7}  "
+                  f"{'A=C p':>10} {'Sig?':>5}")
+        print(header)
+        print("-" * 100)
+        for r in rows:
+            p_val = r.get("a_vs_c_p")
+            p_str = f"{p_val:.6f}" if p_val is not None else "—"
+            print(f"{r['threshold']:<10} {r['n_samples']:>6}  "
+                  f"{r['a_mae']:>8.1f} {r['a_sa']:>6.1f}% {r['a_pred25']:>6.1f}%  "
+                  f"{r.get('b_mae', 0):>8.1f} {r.get('b_sa', 0):>6.1f}%  "
+                  f"{r.get('c_mae', 0):>8.1f} {r.get('c_sa', 0):>6.1f}% {r.get('c_pred25', 0):>6.1f}%  "
+                  f"{p_str:>10} {r.get('a_vs_c_sig', '—'):>5}")
+    else:
+        header = f"{'Threshold':<10} {'N':>6}  {'A MAE':>8} {'A SA':>7} {'A P25':>7} {'A R2':>8}"
+        print(header)
+        print("-" * 60)
+        for r in rows:
+            print(f"{r['threshold']:<10} {r['n_samples']:>6}  "
+                  f"{r['a_mae']:>8.1f} {r['a_sa']:>6.1f}% {r['a_pred25']:>6.1f}% {r['a_r2']:>8.4f}")
+
+    print()
+
+    # Interpretation
+    if has_repo:
+        sig_count = sum(1 for r in rows if r.get("a_vs_c_sig") == "YES")
+        total = len([r for r in rows if "a_vs_c_sig" in r])
+        print(f"A vs C significant at {sig_count}/{total} thresholds")
+        if sig_count == 0:
+            print("=> NULL RESULT IS ROBUST: combining features never significantly helps")
+        elif sig_count == total:
+            print("=> COMBINATION HELPS at all thresholds")
+        else:
+            print("=> MIXED: result depends on threshold choice (report as boundary condition)")
+
+    # Save
+    results_df = pd.DataFrame(rows)
+    out_path = get_model_dir() / "sensitivity_analysis.csv"
+    results_df.to_csv(out_path, index=False)
+    logger.info(f"Sensitivity table saved to {out_path}")
+
+    elapsed = _time.time() - start
+    logger.info(f"Sensitivity analysis complete in {elapsed/60:.1f} min")
+
+
 def step_error_analysis(config: dict):
     """Step 6: Error analysis — scatter plots, bucket grids, SHAP importance.
 
@@ -827,7 +989,7 @@ def main():
         "--step",
         choices=["validate", "collect", "merge_data", "features", "nlp_features",
                  "repo_features", "train_model_a", "train", "analyze",
-                 "error_analysis", "encoder_ablation", "all"],
+                 "error_analysis", "sensitivity", "encoder_ablation", "all"],
         required=True,
         help="Pipeline step to run",
     )
@@ -867,6 +1029,7 @@ def main():
         "train": step_train,
         "analyze": step_analyze,
         "error_analysis": step_error_analysis,
+        "sensitivity": step_sensitivity,
         "encoder_ablation": step_encoder_ablation,
     }
 
