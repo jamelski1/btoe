@@ -1,0 +1,16 @@
+feature,importance
+avg_change_frequency,0.060900625
+avg_churn_per_file,0.048117284
+word_count,0.03934364
+avg_file_age_days,0.03865066
+max_file_age_days,0.03837118
+total_churn_added,0.02719295
+fan_out,0.0268954
+num_files,0.026408589
+text_length,0.024741348
+fan_in,0.02417388
+cross_ref_density,0.01660646
+pca_34,0.015270892
+pca_27,0.015199562
+pca_26,0.014994545
+technical_scope,0.014943466

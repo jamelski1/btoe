@@ -1,0 +1,14 @@
+feature,importance
+total_churn_deleted,0.27339488
+num_files,0.15299882
+avg_change_frequency,0.12971422
+max_file_age_days,0.12402142
+total_churn_added,0.08643834
+avg_churn_per_file,0.07384597
+fan_in,0.06830456
+min_file_age_days,0.04621671
+avg_file_age_days,0.04506506
+fan_out,0.0
+total_churn_commits,0.0
+change_impact_radius,0.0
+max_change_frequency,0.0
