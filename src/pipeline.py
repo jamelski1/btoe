@@ -632,6 +632,20 @@ def step_encoder_ablation(config: dict, encoders: list = None):
     logger.info(f"Total time: {(_time.time() - start)/60:.1f} min")
 
 
+def step_error_analysis(config: dict):
+    """Step 6: Error analysis — scatter plots, bucket grids, SHAP importance.
+
+    Per trained model, produces:
+      - actual_vs_predicted.png       (scatter with ±25% bands)
+      - bucket_grid.png               (classification-style confusion grid)
+      - error_by_range.png            (error box plot by duration bucket)
+      - feature_importance.png        (XGBoost top features)
+    Saved to models/<name>/analysis/
+    """
+    from src.analysis.error_analysis import run_error_analysis
+    run_error_analysis(model_key=None)  # all models
+
+
 def step_analyze(config: dict):
     """Step 5: Statistical comparison between trained models.
 
@@ -813,7 +827,7 @@ def main():
         "--step",
         choices=["validate", "collect", "merge_data", "features", "nlp_features",
                  "repo_features", "train_model_a", "train", "analyze",
-                 "encoder_ablation", "all"],
+                 "error_analysis", "encoder_ablation", "all"],
         required=True,
         help="Pipeline step to run",
     )
@@ -852,6 +866,7 @@ def main():
         "train_model_a": step_train_model_a,
         "train": step_train,
         "analyze": step_analyze,
+        "error_analysis": step_error_analysis,
         "encoder_ablation": step_encoder_ablation,
     }
 
