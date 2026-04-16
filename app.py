@@ -54,6 +54,7 @@ def predict():
     body = (data.get("body") or "").strip()
     files_raw = (data.get("files") or "").strip()
     files = [f.strip() for f in files_raw.split(",") if f.strip()] if files_raw else []
+    repo_url = (data.get("repo_url") or "").strip()
 
     p = get_predictor()
     results = {}
@@ -65,18 +66,20 @@ def predict():
         "metrics": p.get_metrics("a"),
     }
 
-    hours_b, err_b = p.predict_repo_only(files)
+    hours_b, err_b = p.predict_repo_only(files, repo_url=repo_url)
     results["model_b"] = {
         "hours": hours_b,
         "error": err_b,
         "metrics": p.get_metrics("b"),
+        "has_repo": bool(repo_url),
     }
 
-    hours_c, err_c = p.predict_combined(title, body, files=files)
+    hours_c, err_c = p.predict_combined(title, body, files=files, repo_url=repo_url)
     results["model_c"] = {
         "hours": hours_c,
         "error": err_c,
         "metrics": p.get_metrics("c"),
+        "has_repo": bool(repo_url),
     }
 
     return jsonify(results)
