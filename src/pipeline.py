@@ -17,6 +17,7 @@ import logging
 import sys
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from src.utils.config import get_data_dir, get_model_dir, load_config
@@ -260,24 +261,47 @@ def _save_features(df, path):
         logger.info(f"Saved to {csv_path} (CSV fallback)")
 
 
+def _encoder_slug(config: dict) -> str:
+    """Slug representing the NLP encoder, for per-encoder cache files."""
+    name = config.get("nlp", {}).get("model_name", "microsoft/codebert-base")
+    return name.replace("/", "__").replace(" ", "_")
+
+
 def step_nlp_features(config: dict):
-    """Step 3a: Extract NLP features (CodeBERT embeddings + derived)."""
+    """Step 3a: Extract NLP features (encoder embeddings + derived).
+
+    Writes to a per-encoder file so swapping encoders doesn't overwrite
+    prior results. Also maintains a "nlp_features.parquet" symlink-like
+    copy that matches the current config so training/analyze keep working.
+    """
     import time as _time
+    import shutil
     from src.feature_extraction.nlp_features import NLPFeatureExtractor
 
     start = _time.time()
     data_dir = get_data_dir()
     df = _load_raw_data()
 
+    slug = _encoder_slug(config)
     logger.info(f"{'='*60}")
     logger.info(f"Extracting NLP features for {len(df)} issue-PR pairs")
+    logger.info(f"  Encoder: {config['nlp']['model_name']} (slug: {slug})")
     logger.info(f"{'='*60}")
 
     nlp_extractor = NLPFeatureExtractor(config)
     nlp_features = nlp_extractor.extract_all_features(df)
 
-    out_path = data_dir / "processed" / "nlp_features.parquet"
-    _save_features(nlp_features, out_path)
+    # Per-encoder cache file
+    encoder_path = data_dir / "processed" / f"nlp_features__{slug}.parquet"
+    _save_features(nlp_features, encoder_path)
+
+    # Also write the canonical "active" file that downstream steps read
+    active_path = data_dir / "processed" / "nlp_features.parquet"
+    try:
+        nlp_features.to_parquet(active_path, index=False)
+    except ImportError:
+        nlp_features.to_csv(active_path.with_suffix(".csv"), index=False)
+    logger.info(f"Active nlp_features.parquet updated to {slug}")
 
     elapsed = _time.time() - start
     logger.info(f"{'='*60}")
@@ -514,12 +538,273 @@ def step_train(config: dict):
     return results
 
 
-def step_analyze(config: dict):
-    """Step 5: SHAP analysis and error analysis."""
-    from src.analysis.shap_analysis import SHAPAnalyzer
+def step_encoder_ablation(config: dict, encoders: list = None):
+    """Run Model A training with multiple encoders and compare.
 
-    logger.info("Running SHAP and error analysis (requires trained models)")
-    logger.info("This step will be fully implemented after training completes")
+    For each encoder:
+      1. Extract NLP features using that encoder
+      2. Train Model A
+      3. Record test metrics
+
+    Prints a side-by-side comparison at the end. Results for each
+    encoder are saved to models/model_a_text_only__<slug>/
+    """
+    import copy
+    import time as _time
+    from src.feature_extraction.nlp_features import NLPFeatureExtractor
+    from src.modeling.trainer import ModelTrainer
+
+    if encoders is None:
+        encoders = [
+            "microsoft/codebert-base",
+            "microsoft/unixcoder-base",
+            "BAAI/bge-base-en-v1.5",
+        ]
+
+    start = _time.time()
+    data_dir = get_data_dir()
+    df = _load_raw_data()
+
+    # Apply duration filter to the dataset
+    max_hours = config["filtering"]["max_duration_days"] * 24
+    min_hours = config["filtering"]["min_duration_hours"]
+    mask = (df["duration_hours"] >= min_hours) & (df["duration_hours"] <= max_hours)
+    df = df[mask].reset_index(drop=True)
+    y = df["duration_hours"]
+
+    logger.info(f"{'='*72}")
+    logger.info(f"ENCODER ABLATION — {len(encoders)} encoders x {len(df)} samples")
+    logger.info(f"{'='*72}")
+
+    results = {}
+    for i, encoder_name in enumerate(encoders, 1):
+        logger.info(f"\n[{i}/{len(encoders)}] Encoder: {encoder_name}")
+        cfg = copy.deepcopy(config)
+        cfg.setdefault("nlp", {})["model_name"] = encoder_name
+
+        # Extract features (per-encoder cache)
+        slug = _encoder_slug(cfg)
+        cache_path = data_dir / "processed" / f"nlp_features__{slug}.parquet"
+
+        if cache_path.exists():
+            logger.info(f"  Using cached features from {cache_path}")
+            features = pd.read_parquet(cache_path)
+            if len(features) != len(df):
+                logger.info(f"  Cached length mismatch ({len(features)} vs {len(df)}), recomputing")
+                features = None
+        else:
+            features = None
+
+        if features is None:
+            extractor = NLPFeatureExtractor(cfg)
+            features = extractor.extract_all_features(df)
+            _save_features(features, cache_path)
+
+        # Train Model A with a unique name so we don't overwrite
+        model_name = f"model_a_text_only__{slug}"
+        trainer = ModelTrainer(cfg)
+        result = trainer.train_and_evaluate(features, y, model_name)
+        results[encoder_name] = result.test_metrics
+
+    # Print comparison
+    print()
+    print("=" * 88)
+    print("ENCODER ABLATION — TEST METRICS FOR MODEL A")
+    print("=" * 88)
+    header = f"{'Encoder':<40}" + "".join(f"{m.upper():>10}" for m in ["MAE", "MdAE", "PRED25", "R2", "SA"])
+    print(header)
+    print("-" * 88)
+    for enc, metrics in results.items():
+        row = f"{enc:<40}"
+        row += f"{metrics.get('mae', 0):>10.1f}"
+        row += f"{metrics.get('mdae', 0):>10.1f}"
+        row += f"{metrics.get('pred_25', 0):>10.2f}"
+        row += f"{metrics.get('r2', 0):>10.4f}"
+        row += f"{metrics.get('sa', 0):>10.2f}"
+        print(row)
+    print()
+
+    # Save
+    out_path = get_model_dir() / "encoder_ablation.json"
+    with open(out_path, "w") as f:
+        json.dump(results, f, indent=2)
+    logger.info(f"Ablation results saved to {out_path}")
+    logger.info(f"Total time: {(_time.time() - start)/60:.1f} min")
+
+
+def step_analyze(config: dict):
+    """Step 5: Statistical comparison between trained models.
+
+    Loads predictions.csv from each model directory, runs Wilcoxon
+    signed-rank tests and Cliff's delta on test-set errors, and prints
+    a formatted report. Also loads results.json if available.
+    """
+    from scipy import stats
+
+    model_dir = get_model_dir()
+
+    # Load per-model predictions
+    preds = {}
+    test_metrics = {}
+    for key, subdir in [("A", "model_a_text_only"),
+                        ("B", "model_b_repo_only"),
+                        ("C", "model_c_combined")]:
+        preds_path = model_dir / subdir / "predictions.csv"
+        results_path = model_dir / subdir / "results.json"
+
+        if not preds_path.exists():
+            logger.warning(f"Model {key}: predictions.csv not found at {preds_path}")
+            continue
+
+        df = pd.read_csv(preds_path)
+        test_df = df[df["split"] == "test"].reset_index(drop=True)
+        errors = (test_df["actual_hours"] - test_df["predicted_hours"]).abs().values
+        preds[key] = {"df": test_df, "errors": errors}
+
+        if results_path.exists():
+            with open(results_path) as f:
+                test_metrics[key] = json.load(f).get("test_metrics", {})
+
+    if len(preds) < 2:
+        logger.warning("Need at least 2 models trained to run comparison")
+        return
+
+    # Print summary metrics
+    print()
+    print("=" * 72)
+    print("MODEL PERFORMANCE SUMMARY (test set)")
+    print("=" * 72)
+    print(f"{'Metric':<12} {'Model A':>12} {'Model B':>12} {'Model C':>12}")
+    print("-" * 72)
+    for metric in ["mae", "mdae", "mre", "pred_25", "pred_50", "r2", "sa"]:
+        label = {
+            "mae": "MAE (h)",
+            "mdae": "MdAE (h)",
+            "mre": "MMRE",
+            "pred_25": "PRED(25) %",
+            "pred_50": "PRED(50) %",
+            "r2": "R²",
+            "sa": "SA %",
+        }[metric]
+        row = f"{label:<12}"
+        for key in ["A", "B", "C"]:
+            if key in test_metrics and metric in test_metrics[key]:
+                val = test_metrics[key][metric]
+                if metric in ["r2"]:
+                    row += f" {val:>12.4f}"
+                elif metric == "mre":
+                    row += f" {val:>11.2%}"
+                else:
+                    row += f" {val:>12.2f}"
+            else:
+                row += f" {'—':>12}"
+        print(row)
+    print()
+
+    # Pairwise statistical tests
+    print("=" * 72)
+    print("PAIRWISE STATISTICAL COMPARISON")
+    print("=" * 72)
+    print("Null hypothesis: absolute errors between models come from the same distribution")
+    print(f"Significance level α = {config['statistics']['wilcoxon_alpha']}")
+    print()
+
+    pairs = [("A", "B"), ("A", "C"), ("B", "C")]
+    alpha = config["statistics"]["wilcoxon_alpha"]
+    thresholds = config["statistics"]["cliff_delta_thresholds"]
+
+    for k1, k2 in pairs:
+        if k1 not in preds or k2 not in preds:
+            continue
+
+        e1 = preds[k1]["errors"]
+        e2 = preds[k2]["errors"]
+
+        if len(e1) != len(e2):
+            print(f"Model {k1} vs {k2}: SKIP (different test set sizes: {len(e1)} vs {len(e2)})")
+            continue
+
+        # Wilcoxon signed-rank test
+        try:
+            stat, p_value = stats.wilcoxon(e1, e2)
+        except ValueError as e:
+            print(f"Model {k1} vs {k2}: Wilcoxon failed ({e})")
+            continue
+
+        # Cliff's delta
+        more = int(np.sum(e1[:, None] > e2[None, :]))
+        less = int(np.sum(e1[:, None] < e2[None, :]))
+        delta = (more - less) / (len(e1) * len(e2))
+        abs_delta = abs(delta)
+        if abs_delta < thresholds["negligible"]:
+            effect = "negligible"
+        elif abs_delta < thresholds["small"]:
+            effect = "small"
+        elif abs_delta < thresholds["medium"]:
+            effect = "medium"
+        else:
+            effect = "large"
+
+        # Which model has lower errors (better)
+        mean_e1, mean_e2 = e1.mean(), e2.mean()
+        if mean_e1 < mean_e2:
+            better = f"Model {k1}"
+            improvement = (mean_e2 - mean_e1) / mean_e2 * 100
+        else:
+            better = f"Model {k2}"
+            improvement = (mean_e1 - mean_e2) / mean_e1 * 100
+
+        sig = "✓ SIGNIFICANT" if p_value < alpha else "✗ not significant"
+
+        print(f"Model {k1} vs Model {k2}:")
+        print(f"  Wilcoxon statistic: {stat:.1f}")
+        print(f"  p-value:            {p_value:.6f}  ({sig} at α={alpha})")
+        print(f"  Cliff's delta:      {delta:+.4f}  (effect size: {effect})")
+        print(f"  Better model:       {better} (mean error {improvement:.1f}% lower)")
+        print()
+
+    print("=" * 72)
+    print("INTERPRETATION")
+    print("=" * 72)
+    print("Wilcoxon p < α: the two models' error distributions differ significantly")
+    print("Cliff's delta (unbiased effect size):")
+    print(f"  |δ| < {thresholds['negligible']:.3f}: negligible")
+    print(f"  |δ| < {thresholds['small']:.3f}: small")
+    print(f"  |δ| < {thresholds['medium']:.3f}: medium")
+    print(f"  |δ| ≥ {thresholds['medium']:.3f}: large")
+    print()
+
+    # Save full report
+    summary = {
+        "test_metrics": test_metrics,
+        "comparisons": {},
+    }
+    for k1, k2 in pairs:
+        if k1 not in preds or k2 not in preds:
+            continue
+        e1, e2 = preds[k1]["errors"], preds[k2]["errors"]
+        if len(e1) != len(e2):
+            continue
+        try:
+            stat, p = stats.wilcoxon(e1, e2)
+            more = int(np.sum(e1[:, None] > e2[None, :]))
+            less = int(np.sum(e1[:, None] < e2[None, :]))
+            delta = (more - less) / (len(e1) * len(e2))
+            summary["comparisons"][f"{k1}_vs_{k2}"] = {
+                "wilcoxon_stat": float(stat),
+                "p_value": float(p),
+                "significant": bool(p < alpha),
+                "cliffs_delta": float(delta),
+                "mean_abs_error_1": float(e1.mean()),
+                "mean_abs_error_2": float(e2.mean()),
+            }
+        except Exception:
+            continue
+
+    out_path = model_dir / "analysis_report.json"
+    with open(out_path, "w") as f:
+        json.dump(summary, f, indent=2)
+    logger.info(f"Analysis report saved to {out_path}")
 
 
 def main():
@@ -527,7 +812,8 @@ def main():
     parser.add_argument(
         "--step",
         choices=["validate", "collect", "merge_data", "features", "nlp_features",
-                 "repo_features", "train_model_a", "train", "analyze", "all"],
+                 "repo_features", "train_model_a", "train", "analyze",
+                 "encoder_ablation", "all"],
         required=True,
         help="Pipeline step to run",
     )
@@ -537,9 +823,24 @@ def main():
         default=None,
         help="Path to partner's parquet/csv file (for merge_data step)",
     )
+    parser.add_argument(
+        "--encoder",
+        default=None,
+        help=(
+            "Override nlp.model_name to swap encoders. Examples: "
+            "microsoft/codebert-base (default), microsoft/unixcoder-base, "
+            "microsoft/graphcodebert-base, BAAI/bge-base-en-v1.5, "
+            "intfloat/e5-base-v2, sentence-transformers/all-mpnet-base-v2"
+        ),
+    )
     args = parser.parse_args()
 
     config = load_config(args.config)
+
+    if args.encoder:
+        config.setdefault("nlp", {})
+        config["nlp"]["model_name"] = args.encoder
+        logger.info(f"Encoder override: {args.encoder}")
 
     steps = {
         "validate": step_validate,
@@ -551,6 +852,7 @@ def main():
         "train_model_a": step_train_model_a,
         "train": step_train,
         "analyze": step_analyze,
+        "encoder_ablation": step_encoder_ablation,
     }
 
     if args.step == "all":
