@@ -170,60 +170,70 @@ class GitHubMiner:
             batch_seen = 0
             oldest_updated = None
 
-            for issue in issues:
-                if len(pairs) >= max_pairs:
-                    break
+            try:
+                for issue in issues:
+                    if len(pairs) >= max_pairs:
+                        break
 
-                batch_seen += 1
-                # Track the oldest updated_at to set next date window
-                if issue.updated_at:
-                    if oldest_updated is None or issue.updated_at < oldest_updated:
-                        oldest_updated = issue.updated_at
+                    batch_seen += 1
+                    # Track the oldest updated_at to set next date window
+                    if issue.updated_at:
+                        if oldest_updated is None or issue.updated_at < oldest_updated:
+                            oldest_updated = issue.updated_at
 
-                # Skip issues we've already evaluated (saves API calls)
-                if issue.number in skip_issue_numbers:
-                    issues_skipped_existing += 1
-                    continue
-
-                issues_checked += 1
-                newly_checked.add(issue.number)
-
-                # Progress every 25 issues checked
-                if issues_checked % 25 == 0:
-                    elapsed = time.time() - start_time
-                    rate = issues_checked / elapsed * 60 if elapsed > 0 else 0
-                    logger.info(f"  [{owner}/{name}] Checked {issues_checked} issues -> {len(pairs)} pairs found ({elapsed:.0f}s elapsed, {rate:.1f} issues/min, {issues_skipped_existing} pre-skipped)")
-
-                    # Periodically persist the checked log so we don't lose progress
-                    if checked_log_path and issues_checked % 100 == 0:
-                        self._save_checked_log(checked_log_path, checked_set | newly_checked)
-
-                try:
-                    pair = self._try_extract_pair(repo, issue)
-                    if pair is None:
-                        if issue.pull_request is not None:
-                            issues_skipped_pr += 1
-                        else:
-                            issues_no_link += 1
+                    # Skip issues we've already evaluated (saves API calls)
+                    if issue.number in skip_issue_numbers:
+                        issues_skipped_existing += 1
                         continue
 
-                    if self._passes_filters(pair):
-                        pairs.append(pair)
-                        logger.info(f"  + Issue #{issue.number} -> PR #{pair.pr_number} ({pair.duration_hours:.1f}h) [{len(pairs)}/{max_pairs}]")
+                    issues_checked += 1
+                    newly_checked.add(issue.number)
 
-                        # Save after first match to verify saves work, then every 25
-                        if save_path and (len(pairs) == 1 or len(pairs) % 25 == 0):
-                            self._incremental_save(pairs, save_path, owner, name)
-                    else:
-                        issues_filtered += 1
+                    # Progress every 25 issues checked
+                    if issues_checked % 25 == 0:
+                        elapsed = time.time() - start_time
+                        rate = issues_checked / elapsed * 60 if elapsed > 0 else 0
+                        logger.info(f"  [{owner}/{name}] Checked {issues_checked} issues -> {len(pairs)} pairs found ({elapsed:.0f}s elapsed, {rate:.1f} issues/min, {issues_skipped_existing} pre-skipped)")
 
-                except RateLimitExceededException:
-                    logger.warning(f"  Rate limit hit after {issues_checked} issues, waiting for reset...")
-                    self._handle_rate_limit()
-                    logger.info(f"  Resuming...")
-                except Exception as e:
-                    logger.warning(f"Error processing issue #{issue.number}: {e}")
-                    continue
+                        # Periodically persist the checked log so we don't lose progress
+                        if checked_log_path and issues_checked % 100 == 0:
+                            self._save_checked_log(checked_log_path, checked_set | newly_checked)
+
+                    try:
+                        pair = self._try_extract_pair(repo, issue)
+                        if pair is None:
+                            if issue.pull_request is not None:
+                                issues_skipped_pr += 1
+                            else:
+                                issues_no_link += 1
+                            continue
+
+                        if self._passes_filters(pair):
+                            pairs.append(pair)
+                            logger.info(f"  + Issue #{issue.number} -> PR #{pair.pr_number} ({pair.duration_hours:.1f}h) [{len(pairs)}/{max_pairs}]")
+
+                            # Save after first match to verify saves work, then every 25
+                            if save_path and (len(pairs) == 1 or len(pairs) % 25 == 0):
+                                self._incremental_save(pairs, save_path, owner, name)
+                        else:
+                            issues_filtered += 1
+
+                    except RateLimitExceededException:
+                        logger.warning(f"  Rate limit hit after {issues_checked} issues, waiting for reset...")
+                        self._handle_rate_limit()
+                        logger.info(f"  Resuming...")
+                    except Exception as e:
+                        logger.warning(f"Error processing issue #{issue.number}: {e}")
+                        continue
+
+            except RateLimitExceededException:
+                logger.warning(f"  Rate limit hit during pagination, waiting for reset...")
+                self._handle_rate_limit()
+                search_exhausted = True  # restart outer loop cleanly on next call
+            except Exception as e:
+                logger.warning(f"  Network error during pagination after {issues_checked} issues: {e}")
+                logger.warning(f"  Saving progress ({len(pairs)} pairs) and stopping.")
+                search_exhausted = True
 
             # If this batch returned < 1000 results, there are no more issues
             if batch_seen < 1000:

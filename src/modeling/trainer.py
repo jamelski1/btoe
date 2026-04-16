@@ -314,6 +314,7 @@ class ModelTrainer:
             "train_metrics": result.train_metrics,
             "test_metrics": result.test_metrics,
             "best_params": result.best_params,
+            "feature_names": result.feature_names,
             "n_features": len(result.feature_names),
             "n_train": len(result.train_actuals),
             "n_test": len(result.test_actuals),
