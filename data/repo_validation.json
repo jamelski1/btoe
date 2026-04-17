@@ -1,5 +1,6 @@
 [
   {
+<<<<<<< Updated upstream
     "repo": "microsoft/vscode",
     "total_closed_issues": 1000,
     "contributor_count": 11,
@@ -23,6 +24,9 @@
   },
   {
     "repo": "rust-lang/rust",
+=======
+    "repo": "facebook/react",
+>>>>>>> Stashed changes
     "total_closed_issues": 1000,
     "contributor_count": 11,
     "age_years": 15.8,
@@ -38,6 +42,39 @@
     "contributor_count": 11,
     "age_years": 11.8,
     "license": "Apache-2.0",
+    "meets_issue_threshold": true,
+    "meets_contributor_threshold": true,
+    "meets_age_threshold": true,
+    "passes_all": true
+  },
+  {
+    "repo": "flutter/flutter",
+    "total_closed_issues": 1000,
+    "contributor_count": 11,
+    "age_years": 11.1,
+    "license": "BSD-3-Clause",
+    "meets_issue_threshold": true,
+    "meets_contributor_threshold": true,
+    "meets_age_threshold": true,
+    "passes_all": true
+  },
+  {
+    "repo": "django/django",
+    "total_closed_issues": 0,
+    "contributor_count": 11,
+    "age_years": 14.0,
+    "license": "BSD-3-Clause",
+    "meets_issue_threshold": false,
+    "meets_contributor_threshold": true,
+    "meets_age_threshold": true,
+    "passes_all": false
+  },
+  {
+    "repo": "pytorch/pytorch",
+    "total_closed_issues": 1000,
+    "contributor_count": 11,
+    "age_years": 9.7,
+    "license": "NOASSERTION",
     "meets_issue_threshold": true,
     "meets_contributor_threshold": true,
     "meets_age_threshold": true,
