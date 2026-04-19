@@ -808,6 +808,17 @@ def step_error_analysis(config: dict):
     run_error_analysis(model_key=None)  # all models
 
 
+def step_examples(config: dict):
+    """Step 7: Extract representative good/bad predictions per bucket.
+
+    For each model, samples the best and worst predictions in each
+    duration bucket and writes them as a readable markdown report.
+    Useful for qualitative error analysis in the paper.
+    """
+    from src.analysis.example_predictions import run_extract_examples
+    run_extract_examples(n_per_bucket=3)
+
+
 def step_analyze(config: dict):
     """Step 5: Statistical comparison between trained models.
 
@@ -989,7 +1000,8 @@ def main():
         "--step",
         choices=["validate", "collect", "merge_data", "features", "nlp_features",
                  "repo_features", "train_model_a", "train", "analyze",
-                 "error_analysis", "sensitivity", "encoder_ablation", "all"],
+                 "error_analysis", "examples", "sensitivity",
+                 "encoder_ablation", "all"],
         required=True,
         help="Pipeline step to run",
     )
@@ -1029,6 +1041,7 @@ def main():
         "train": step_train,
         "analyze": step_analyze,
         "error_analysis": step_error_analysis,
+        "examples": step_examples,
         "sensitivity": step_sensitivity,
         "encoder_ablation": step_encoder_ablation,
     }
