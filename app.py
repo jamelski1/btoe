@@ -90,10 +90,19 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=5000)
     parser.add_argument("--config", default=None, help="Path to config YAML")
+    parser.add_argument("--ngrok", action="store_true", help="Expose via ngrok tunnel")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
     app.config["SE3M_CONFIG"] = cfg
+
+    if args.ngrok:
+        try:
+            from pyngrok import ngrok
+            tunnel = ngrok.connect(args.port)
+            logger.info("ngrok tunnel: %s", tunnel.public_url)
+        except ImportError:
+            logger.warning("pyngrok not installed — run: pip install pyngrok")
 
     logger.info("Starting Issue Duration Estimator on http://localhost:%d", args.port)
     app.run(host="0.0.0.0", port=args.port, debug=False)
