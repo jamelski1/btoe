@@ -20,12 +20,38 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 predictor: ModelPredictor | None = None
 
+# Text-based task categories where Model A (CodeBERT + NLP) performs best,
+# shown in the UI as a dropdown to help users frame their estimate.
+TEXT_TASK_CATEGORIES = [
+    {"id": "bug_fix",      "label": "Bug fix",            "typical_hours": "2–8h"},
+    {"id": "documentation", "label": "Documentation",      "typical_hours": "1–4h"},
+    {"id": "refactor",     "label": "Refactor / cleanup", "typical_hours": "4–16h"},
+    {"id": "small_feature", "label": "Small feature",      "typical_hours": "8–24h"},
+    {"id": "test_addition", "label": "Test addition",      "typical_hours": "2–6h"},
+    {"id": "config_change", "label": "Config change",      "typical_hours": "1–3h"},
+]
+
 
 def get_predictor() -> ModelPredictor:
     global predictor
     if predictor is None:
         predictor = ModelPredictor(app.config["SE3M_CONFIG"])
     return predictor
+
+
+def effort_tier(hours: float | None) -> str | None:
+    """Coarse effort bucket for a predicted duration."""
+    if hours is None:
+        return None
+    if hours < 1:
+        return "Trivial"
+    if hours < 4:
+        return "Small"
+    if hours < 16:
+        return "Medium"
+    if hours < 40:
+        return "Large"
+    return "XL"
 
 
 # ------------------------------------------------------------------ #
@@ -47,6 +73,12 @@ def status():
     })
 
 
+@app.get("/categories")
+def categories():
+    """Text-based task categories Model A handles well."""
+    return jsonify({"categories": TEXT_TASK_CATEGORIES})
+
+
 @app.post("/predict")
 def predict():
     data = request.get_json(force=True)
@@ -55,15 +87,17 @@ def predict():
     files_raw = (data.get("files") or "").strip()
     files = [f.strip() for f in files_raw.split(",") if f.strip()] if files_raw else []
     repo_url = (data.get("repo_url") or "").strip()
+    category = (data.get("category") or "").strip()
 
     p = get_predictor()
-    results = {}
+    results = {"category": category or None}
 
     hours_a, err_a = p.predict_text_only(title, body)
     results["model_a"] = {
         "hours": hours_a,
         "error": err_a,
         "metrics": p.get_metrics("a"),
+        "effort_tier": effort_tier(hours_a),
     }
 
     hours_b, err_b = p.predict_repo_only(files, repo_url=repo_url)
@@ -72,6 +106,7 @@ def predict():
         "error": err_b,
         "metrics": p.get_metrics("b"),
         "has_repo": bool(repo_url),
+        "effort_tier": effort_tier(hours_b),
     }
 
     hours_c, err_c = p.predict_combined(title, body, files=files, repo_url=repo_url)
@@ -80,6 +115,7 @@ def predict():
         "error": err_c,
         "metrics": p.get_metrics("c"),
         "has_repo": bool(repo_url),
+        "effort_tier": effort_tier(hours_c),
     }
 
     return jsonify(results)
