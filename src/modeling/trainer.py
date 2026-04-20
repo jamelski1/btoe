@@ -20,6 +20,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 from sklearn.decomposition import PCA
+from sklearn.feature_selection import SelectKBest, f_regression
 from sklearn.model_selection import KFold, cross_val_predict, train_test_split
 from sklearn.preprocessing import StandardScaler
 from skopt import BayesSearchCV
@@ -121,6 +122,72 @@ class ModelTrainer:
 
         return pd.concat([pca_df, other_df], axis=1)
 
+    def select_topk_embeddings(self, X: pd.DataFrame, y: pd.Series,
+                                 k: int = None) -> tuple:
+        """Select top-K embedding dimensions by F-statistic with target.
+
+        Like reduce_embeddings but uses supervised feature selection (Top-K
+        by f_regression) instead of unsupervised PCA. The 6 derived NLP
+        features and any non-embedding columns are always retained.
+
+        Returns (X_selected, scaler, selector).
+        """
+        emb_cols = [c for c in X.columns if c.startswith("emb_")]
+        other_cols = [c for c in X.columns if not c.startswith("emb_")]
+
+        if not emb_cols:
+            logger.info("  No embedding columns found, skipping Top-K")
+            return X, None, None
+
+        n_emb = len(emb_cols)
+        if k is None:
+            cfg_k = self.config.get("topk", {}).get("k", 50)
+            k = min(cfg_k, len(X) // 5)
+        k = min(k, n_emb)
+
+        logger.info(f"  Top-K: selecting {k}/{n_emb} embedding dims by F-statistic")
+
+        # Standardize before selection (consistent with PCA path)
+        scaler = StandardScaler()
+        emb_scaled = scaler.fit_transform(X[emb_cols])
+
+        selector = SelectKBest(score_func=f_regression, k=k)
+        emb_selected = selector.fit_transform(emb_scaled, y)
+
+        selected_idx = selector.get_support(indices=True)
+        # Show top scores (informative)
+        top_scores = sorted(selector.scores_[selected_idx], reverse=True)[:5]
+        logger.info(f"  Top-K: top-5 F-scores: {[f'{s:.1f}' for s in top_scores]}")
+
+        topk_cols = [f"topk_{emb_cols[i].replace('emb_', '')}" for i in selected_idx]
+        topk_df = pd.DataFrame(emb_selected, index=X.index, columns=topk_cols)
+        other_df = X[other_cols].reset_index(drop=True)
+        topk_df = topk_df.reset_index(drop=True)
+
+        X_selected = pd.concat([topk_df, other_df], axis=1)
+        logger.info(f"  Final feature set: {len(topk_cols)} Top-K + {len(other_cols)} derived = {X_selected.shape[1]} features")
+
+        return X_selected, scaler, selector
+
+    def transform_topk_embeddings(self, X: pd.DataFrame, scaler, selector) -> pd.DataFrame:
+        """Apply a previously fitted Top-K selection to new data."""
+        emb_cols = [c for c in X.columns if c.startswith("emb_")]
+        other_cols = [c for c in X.columns if not c.startswith("emb_")]
+
+        if scaler is None or selector is None:
+            return X
+
+        emb_scaled = scaler.transform(X[emb_cols])
+        emb_selected = selector.transform(emb_scaled)
+
+        selected_idx = selector.get_support(indices=True)
+        topk_cols = [f"topk_{emb_cols[i].replace('emb_', '')}" for i in selected_idx]
+        topk_df = pd.DataFrame(emb_selected, index=X.index, columns=topk_cols)
+        other_df = X[other_cols].reset_index(drop=True)
+        topk_df = topk_df.reset_index(drop=True)
+
+        return pd.concat([topk_df, other_df], axis=1)
+
     def get_search_space(self) -> dict:
         """Define Bayesian optimization search space for XGBoost."""
         return {
@@ -170,13 +237,21 @@ class ModelTrainer:
         logger.info(f"  Target stats (train): mean={y_train.mean():.1f}h, median={y_train.median():.1f}h, std={y_train.std():.1f}h")
         logger.info(f"  Target stats (test):  mean={y_test.mean():.1f}h, median={y_test.median():.1f}h, std={y_test.std():.1f}h")
 
-        # --- PCA reduction on embeddings (fit on train only) ---
+        # --- Feature selection on embeddings (fit on train only) ---
+        # Selection method controlled by config: "pca" (default) or "topk"
+        method = self.config.get("feature_selection", {}).get("method", "pca")
         emb_cols = [c for c in X_train.columns if c.startswith("emb_")]
-        if emb_cols:
+
+        if not emb_cols:
+            scaler, pca, selector = None, None, None
+        elif method == "topk":
+            X_train, scaler, selector = self.select_topk_embeddings(X_train, y_train)
+            X_test = self.transform_topk_embeddings(X_test, scaler, selector)
+            pca = None
+        else:  # pca (default)
             X_train, scaler, pca = self.reduce_embeddings(X_train)
             X_test = self.transform_embeddings(X_test, scaler, pca)
-        else:
-            scaler, pca = None, None
+            selector = None
 
         # --- Log-transform target to handle skewed distribution ---
         y_train_log = np.log1p(y_train)
@@ -271,7 +346,7 @@ class ModelTrainer:
             test_indices=X_test.index.values,
         )
 
-        self._save_result(result, best_model, scaler=scaler, pca=pca)
+        self._save_result(result, best_model, scaler=scaler, pca=pca, selector=selector)
 
         total_elapsed = time.time() - total_start
         logger.info(f"{'='*60}")
@@ -290,18 +365,22 @@ class ModelTrainer:
         logger.info(f"    R2:       {metrics['r2']:.4f}")
         logger.info(f"    SA:       {metrics['sa']:.1f}%")
 
-    def _save_result(self, result: ModelResult, model: XGBRegressor, scaler=None, pca=None):
+    def _save_result(self, result: ModelResult, model: XGBRegressor,
+                      scaler=None, pca=None, selector=None):
         """Save model artifact and results JSON to disk."""
         model_dir = get_model_dir() / result.name
         model_dir.mkdir(parents=True, exist_ok=True)
 
-        # Save PCA/scaler if used
+        # Save scaler if used
         if scaler is not None:
             joblib.dump(scaler, model_dir / "scaler.joblib")
         if pca is not None:
             joblib.dump(pca, model_dir / "pca.joblib")
             logger.info(f"  PCA ({pca.n_components_} components, "
                         f"{pca.explained_variance_ratio_.sum()*100:.1f}% variance) saved")
+        if selector is not None:
+            joblib.dump(selector, model_dir / "selector.joblib")
+            logger.info(f"  Top-K selector ({selector.k} features) saved")
 
         # Save trained model
         model_path = model_dir / "model.joblib"

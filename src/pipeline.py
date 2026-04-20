@@ -538,6 +538,78 @@ def step_train(config: dict):
     return results
 
 
+def step_feature_selection_ablation(config: dict):
+    """Compare PCA vs Top-K feature selection at multiple K values.
+
+    Runs Model A with each (method, k) combination and prints a
+    side-by-side metrics table. Helps answer: does supervised feature
+    selection (Top-K by F-statistic) beat unsupervised PCA at the same
+    feature budget?
+    """
+    import copy
+    import time as _time
+    from src.modeling.trainer import ModelTrainer
+
+    configurations = [
+        ("pca", 20),
+        ("pca", 50),
+        ("topk", 20),
+        ("topk", 50),
+    ]
+
+    start = _time.time()
+    df = _load_raw_data()
+    nlp = _load_features("nlp_features")
+    df, nlp = _apply_duration_filter(df, nlp, config)
+    y = df["duration_hours"]
+
+    logger.info(f"{'='*80}")
+    logger.info(f"FEATURE SELECTION ABLATION — {len(configurations)} configurations × {len(df)} samples")
+    logger.info(f"{'='*80}")
+
+    results = {}
+    for method, k in configurations:
+        label = f"{method.upper()}-{k}"
+        logger.info(f"\n[{label}] Starting...")
+
+        cfg = copy.deepcopy(config)
+        cfg.setdefault("feature_selection", {})["method"] = method
+        if method == "pca":
+            cfg.setdefault("pca", {})["n_components"] = k
+        else:
+            cfg.setdefault("topk", {})["k"] = k
+
+        trainer = ModelTrainer(cfg)
+        result = trainer.train_and_evaluate(
+            nlp, y, f"feature_sel_{method}_{k}"
+        )
+        results[label] = result.test_metrics
+
+    # Print comparison
+    print()
+    print("=" * 88)
+    print("FEATURE SELECTION ABLATION — TEST METRICS FOR MODEL A")
+    print("=" * 88)
+    print(f"{'Config':<12} {'MAE':>10} {'MdAE':>10} {'PRED25':>9} {'PRED50':>9} {'R2':>10} {'SA':>9}")
+    print("-" * 88)
+    for label, metrics in results.items():
+        print(f"{label:<12} "
+              f"{metrics.get('mae', 0):>10.2f} "
+              f"{metrics.get('mdae', 0):>10.2f} "
+              f"{metrics.get('pred_25', 0):>8.2f}% "
+              f"{metrics.get('pred_50', 0):>8.2f}% "
+              f"{metrics.get('r2', 0):>10.4f} "
+              f"{metrics.get('sa', 0):>8.2f}%")
+    print()
+
+    # Save
+    out_path = get_model_dir() / "feature_selection_ablation.json"
+    with open(out_path, "w") as f:
+        json.dump(results, f, indent=2)
+    logger.info(f"Saved results to {out_path}")
+    logger.info(f"Total time: {(_time.time() - start)/60:.1f} min")
+
+
 def step_encoder_ablation(config: dict, encoders: list = None):
     """Run Model A training with multiple encoders and compare.
 
@@ -1001,7 +1073,7 @@ def main():
         choices=["validate", "collect", "merge_data", "features", "nlp_features",
                  "repo_features", "train_model_a", "train", "analyze",
                  "error_analysis", "examples", "sensitivity",
-                 "encoder_ablation", "all"],
+                 "encoder_ablation", "feature_selection_ablation", "all"],
         required=True,
         help="Pipeline step to run",
     )
@@ -1044,6 +1116,7 @@ def main():
         "examples": step_examples,
         "sensitivity": step_sensitivity,
         "encoder_ablation": step_encoder_ablation,
+        "feature_selection_ablation": step_feature_selection_ablation,
     }
 
     if args.step == "all":
