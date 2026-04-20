@@ -17,6 +17,12 @@ os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 print("[startup] env vars set", flush=True)
 
+# macOS: torch and xgboost each bundle their own libomp.dylib. Loading
+# xgboost AFTER torch crashes on macOS (arm64 especially). Importing
+# xgboost first makes its libomp "win" and torch reuses it.
+print("[startup] importing xgboost (pre-torch, macOS libomp workaround)", flush=True)
+import xgboost  # noqa: F401
+
 import argparse
 import logging
 
