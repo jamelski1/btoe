@@ -6,6 +6,13 @@ Usage:
     python app.py --config configs/mansi.yaml
 """
 
+import os
+
+# Must be set before numpy/torch are imported. numpy's MKL loads Intel's
+# libiomp5 and torch loads libomp; on macOS the duplicate load segfaults
+# at import time unless this is set.
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+
 import argparse
 import logging
 
