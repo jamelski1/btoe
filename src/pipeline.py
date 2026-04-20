@@ -538,6 +538,80 @@ def step_train(config: dict):
     return results
 
 
+def step_dimensionality_sweep(config: dict):
+    """Sweep PCA dimensionality across 7 values from 50 to 768.
+
+    Fine-grained benchmark of how prediction accuracy varies with the
+    PCA feature budget. Covers evenly-spaced points plus NONE-774 for
+    the upper bound. Useful for plotting the accuracy-vs-dimensions curve.
+    """
+    import copy
+    import time as _time
+    from src.modeling.trainer import ModelTrainer
+
+    # Evenly-spaced sweep: 50 → 650 in 6 steps, plus NONE for full 768
+    configurations = [
+        ("pca", 50),
+        ("pca", 170),
+        ("pca", 290),
+        ("pca", 410),
+        ("pca", 530),
+        ("pca", 650),
+        ("none", 768),
+    ]
+
+    start = _time.time()
+    df = _load_raw_data()
+    nlp = _load_features("nlp_features")
+    df, nlp = _apply_duration_filter(df, nlp, config)
+    y = df["duration_hours"]
+
+    logger.info(f"{'='*80}")
+    logger.info(f"DIMENSIONALITY SWEEP — {len(configurations)} configurations × {len(df)} samples")
+    logger.info(f"  Estimated total runtime: 2-3 hours (larger K = longer training)")
+    logger.info(f"{'='*80}")
+
+    results = {}
+    for method, k in configurations:
+        label = f"{method.upper()}-{k}" if method != "none" else "NONE-768"
+        logger.info(f"\n[{label}] Starting...")
+
+        cfg = copy.deepcopy(config)
+        cfg.setdefault("feature_selection", {})["method"] = method
+        if method == "pca":
+            cfg.setdefault("pca", {})["n_components"] = k
+
+        trainer = ModelTrainer(cfg)
+        result = trainer.train_and_evaluate(
+            nlp, y, f"dim_sweep_{method}_{k}"
+        )
+        results[label] = result.test_metrics
+
+    # Print comparison
+    print()
+    print("=" * 88)
+    print("DIMENSIONALITY SWEEP — TEST METRICS FOR MODEL A")
+    print("=" * 88)
+    print(f"{'Config':<12} {'MAE':>10} {'MdAE':>10} {'PRED25':>9} {'PRED50':>9} {'R2':>10} {'SA':>9}")
+    print("-" * 88)
+    for label, metrics in results.items():
+        print(f"{label:<12} "
+              f"{metrics.get('mae', 0):>10.2f} "
+              f"{metrics.get('mdae', 0):>10.2f} "
+              f"{metrics.get('pred_25', 0):>8.2f}% "
+              f"{metrics.get('pred_50', 0):>8.2f}% "
+              f"{metrics.get('r2', 0):>10.4f} "
+              f"{metrics.get('sa', 0):>8.2f}%")
+    print()
+
+    # Save
+    out_path = get_model_dir() / "dimensionality_sweep.json"
+    with open(out_path, "w") as f:
+        json.dump(results, f, indent=2)
+    logger.info(f"Saved results to {out_path}")
+    logger.info(f"Total time: {(_time.time() - start)/60:.1f} min")
+
+
 def step_feature_selection_ablation(config: dict):
     """Compare PCA vs Top-K feature selection at multiple K values.
 
@@ -1074,7 +1148,8 @@ def main():
         choices=["validate", "collect", "merge_data", "features", "nlp_features",
                  "repo_features", "train_model_a", "train", "analyze",
                  "error_analysis", "examples", "sensitivity",
-                 "encoder_ablation", "feature_selection_ablation", "all"],
+                 "encoder_ablation", "feature_selection_ablation",
+                 "dimensionality_sweep", "all"],
         required=True,
         help="Pipeline step to run",
     )
@@ -1118,6 +1193,7 @@ def main():
         "sensitivity": step_sensitivity,
         "encoder_ablation": step_encoder_ablation,
         "feature_selection_ablation": step_feature_selection_ablation,
+        "dimensionality_sweep": step_dimensionality_sweep,
     }
 
     if args.step == "all":
