@@ -555,6 +555,7 @@ def step_feature_selection_ablation(config: dict):
         ("pca", 50),
         ("topk", 20),
         ("topk", 50),
+        ("none", 768),
     ]
 
     start = _time.time()
@@ -569,14 +570,14 @@ def step_feature_selection_ablation(config: dict):
 
     results = {}
     for method, k in configurations:
-        label = f"{method.upper()}-{k}"
+        label = f"{method.upper()}-{k}" if method != "none" else "NONE-768"
         logger.info(f"\n[{label}] Starting...")
 
         cfg = copy.deepcopy(config)
         cfg.setdefault("feature_selection", {})["method"] = method
         if method == "pca":
             cfg.setdefault("pca", {})["n_components"] = k
-        else:
+        elif method == "topk":
             cfg.setdefault("topk", {})["k"] = k
 
         trainer = ModelTrainer(cfg)
