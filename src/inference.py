@@ -305,4 +305,6 @@ class ModelPredictor:
 
     def is_available(self, key: str) -> bool:
         """True if the model has been trained and saved to disk."""
-        return self._load(key) is not None
+        # Pure filesystem check — avoids triggering native-library loads
+        # (XGBoost/libomp) inside Flask worker threads, which segfaults on macOS.
+        return (get_model_dir() / MODEL_DIRS[key] / "model.joblib").exists()
