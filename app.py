@@ -6,6 +6,13 @@ Usage:
     python app.py --config configs/mansi.yaml
 """
 
+import os
+
+# Must be set before numpy/torch are imported. numpy's MKL loads Intel's
+# libiomp5 and torch loads libomp; on macOS the duplicate load segfaults
+# at import time unless this is set.
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+
 import argparse
 import logging
 
@@ -125,6 +132,18 @@ def predict():
 # Entry point                                                          #
 # ------------------------------------------------------------------ #
 
+def _warmup(p: ModelPredictor) -> None:
+    """Eagerly load native-backed models on the main thread.
+
+    XGBoost's bundled libomp segfaults on macOS when first initialized from a
+    Flask worker thread, so we force the load here before the server starts.
+    """
+    for key in ("a", "b", "c"):
+        if p.is_available(key):
+            p._load(key)
+    p._nlp_extractor().model  # triggers CodeBERT/tokenizer download + load
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=5000)
@@ -133,6 +152,8 @@ if __name__ == "__main__":
 
     cfg = load_config(args.config)
     app.config["SE3M_CONFIG"] = cfg
+
+    _warmup(get_predictor())
 
     logger.info("Starting Issue Duration Estimator on http://localhost:%d", args.port)
     app.run(host="0.0.0.0", port=args.port, debug=False)
