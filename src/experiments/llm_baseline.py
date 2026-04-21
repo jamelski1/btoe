@@ -61,15 +61,19 @@ def estimate_with_llm(title: str, body: str, model: str = "gpt-4o") -> tuple[flo
     user_msg = f"Issue Title: {title}\n\nIssue Body:\n{body_truncated}"
 
     try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
+        # GPT-5+ uses max_completion_tokens; older models use max_tokens
+        token_param = "max_completion_tokens" if "5" in model or "o3" in model or "o4" in model else "max_tokens"
+        api_kwargs = {
+            "model": model,
+            "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_msg},
             ],
-            temperature=0.0,
-            max_tokens=200,
-        )
+            "temperature": 0.0,
+            token_param: 200,
+        }
+
+        response = client.chat.completions.create(**api_kwargs)
 
         text = response.choices[0].message.content.strip()
 
