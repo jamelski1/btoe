@@ -238,11 +238,15 @@ class ModelTrainer:
         logger.info(f"  Target stats (test):  mean={y_test.mean():.1f}h, median={y_test.median():.1f}h, std={y_test.std():.1f}h")
 
         # --- Feature selection on embeddings (fit on train only) ---
-        # Selection method controlled by config: "pca" (default) or "topk"
+        # Selection method: "pca" (default), "topk", or "none" (use all 768 dims)
         method = self.config.get("feature_selection", {}).get("method", "pca")
         emb_cols = [c for c in X_train.columns if c.startswith("emb_")]
 
         if not emb_cols:
+            scaler, pca, selector = None, None, None
+        elif method == "none":
+            logger.info(f"  No dimensionality reduction: using all {len(emb_cols)} embedding dims + "
+                        f"{len(X_train.columns) - len(emb_cols)} derived = {len(X_train.columns)} features")
             scaler, pca, selector = None, None, None
         elif method == "topk":
             X_train, scaler, selector = self.select_topk_embeddings(X_train, y_train)
