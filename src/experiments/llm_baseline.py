@@ -4,15 +4,21 @@ Sends raw issue text to a frontier LLM (GPT-4o / GPT-5.2 / etc.) and
 asks it to predict implementation duration in hours. Compares against
 actual durations and our trained Model A predictions.
 
-This is a "black box" baseline — the LLM sees only the issue title and
-body, with no training, no embeddings, and no feature engineering.
+By default, evaluates on the exact same test samples as Model A
+(loaded from models/model_a_text_only/results.json test_indices)
+for a fair head-to-head comparison.
+
+Supports resume: if interrupted, re-running with the same arguments
+will load partial results and continue from where it stopped.
 
 Usage:
     pip install openai
     set OPENAI_API_KEY=sk-...
-    python src/experiments/llm_baseline.py --n 100 --model gpt-4o
+    python src/experiments/llm_baseline.py --model gpt-4o
+    python src/experiments/llm_baseline.py --model gpt-5.2
+    python src/experiments/llm_baseline.py --n 50 --random   # random subset instead
 
-Output: models/llm_baseline/results.json + comparison table
+Output: models/llm_baseline/<model>/results.json + comparison table
 """
 
 import argparse
@@ -55,13 +61,10 @@ def estimate_with_llm(title: str, body: str, model: str = "gpt-4o") -> tuple[flo
 
     client = OpenAI()
 
-    # Truncate body to ~2000 chars to control costs
     body_truncated = body[:2000] if body else ""
-
     user_msg = f"Issue Title: {title}\n\nIssue Body:\n{body_truncated}"
 
     try:
-        # GPT-5+ uses max_completion_tokens; older models use max_tokens
         token_param = "max_completion_tokens" if "5" in model or "o3" in model or "o4" in model else "max_tokens"
         api_kwargs = {
             "model": model,
@@ -77,8 +80,6 @@ def estimate_with_llm(title: str, body: str, model: str = "gpt-4o") -> tuple[flo
 
         text = response.choices[0].message.content.strip()
 
-        # Parse JSON from response
-        # Handle cases where model wraps in markdown code blocks
         json_match = re.search(r'\{[^}]+\}', text)
         if json_match:
             parsed = json.loads(json_match.group())
@@ -114,22 +115,20 @@ def compute_metrics(actuals: np.ndarray, predictions: np.ndarray) -> dict:
     }
 
 
-def main():
-    parser = argparse.ArgumentParser(description="LLM Zero-Shot Effort Estimation Baseline")
-    parser.add_argument("--n", type=int, default=100,
-                        help="Number of test samples to evaluate (default: 100)")
-    parser.add_argument("--model", default="gpt-4o",
-                        help="OpenAI model name (default: gpt-4o)")
-    parser.add_argument("--seed", type=int, default=42,
-                        help="Random seed for sampling")
-    args = parser.parse_args()
+def load_model_a_test_set() -> tuple[list[int], pd.DataFrame] | None:
+    """Load Model A's test indices and return (indices, filtered_df)."""
+    results_path = Path("models/model_a_text_only/results.json")
+    if not results_path.exists():
+        return None
 
-    if not os.getenv("OPENAI_API_KEY"):
-        print("Set OPENAI_API_KEY environment variable first:")
-        print("  set OPENAI_API_KEY=sk-...")
-        return
+    with open(results_path) as f:
+        results = json.load(f)
 
-    # Load raw data
+    test_indices = results.get("test_indices")
+    if not test_indices:
+        return None
+
+    # Load and filter raw data the same way training does
     data_dir = Path("data")
     parquet_path = data_dir / "raw" / "issue_pr_pairs.parquet"
     csv_path = data_dir / "raw" / "issue_pr_pairs.csv"
@@ -139,29 +138,98 @@ def main():
     elif csv_path.exists():
         df = pd.read_csv(csv_path)
     else:
-        print("No raw data found. Run the collect step first.")
-        return
+        return None
 
-    # Apply same duration filter as training
     mask = (df["duration_hours"] >= 1) & (df["duration_hours"] <= 2160)
     df = df[mask].reset_index(drop=True)
 
-    # Sample n test cases
-    sample = df.sample(n=min(args.n, len(df)), random_state=args.seed)
-    logger.info(f"Sampled {len(sample)} issues for LLM evaluation")
+    return test_indices, df
+
+
+def main():
+    parser = argparse.ArgumentParser(description="LLM Zero-Shot Effort Estimation Baseline")
+    parser.add_argument("--model", default="gpt-4o",
+                        help="OpenAI model name (default: gpt-4o)")
+    parser.add_argument("--n", type=int, default=None,
+                        help="Limit to first N test samples (default: all)")
+    parser.add_argument("--random", action="store_true",
+                        help="Use random sampling instead of Model A's test set")
+    parser.add_argument("--seed", type=int, default=42,
+                        help="Random seed (only used with --random)")
+    args = parser.parse_args()
+
+    if not os.getenv("OPENAI_API_KEY"):
+        print("Set OPENAI_API_KEY environment variable first:")
+        print("  set OPENAI_API_KEY=sk-...")
+        return
+
+    # Output directory per model
+    model_slug = args.model.replace("/", "_").replace(".", "_")
+    out_dir = Path("models/llm_baseline") / model_slug
+    out_dir.mkdir(parents=True, exist_ok=True)
+    partial_path = out_dir / "partial_results.json"
+
+    # Load data
+    if args.random:
+        # Random sampling mode (original behavior)
+        data_dir = Path("data")
+        if (data_dir / "raw" / "issue_pr_pairs.parquet").exists():
+            df = pd.read_parquet(data_dir / "raw" / "issue_pr_pairs.parquet")
+        else:
+            df = pd.read_csv(data_dir / "raw" / "issue_pr_pairs.csv")
+        mask = (df["duration_hours"] >= 1) & (df["duration_hours"] <= 2160)
+        df = df[mask].reset_index(drop=True)
+        n = args.n or 100
+        sample = df.sample(n=min(n, len(df)), random_state=args.seed)
+        logger.info(f"Random sampling: {len(sample)} issues")
+    else:
+        # Match Model A's test set (default)
+        loaded = load_model_a_test_set()
+        if loaded is None:
+            print("Could not load Model A test indices.")
+            print("Either train Model A first, or use --random for random sampling.")
+            return
+
+        test_indices, df = loaded
+        sample = df.iloc[test_indices].reset_index(drop=True)
+        if args.n:
+            sample = sample.head(args.n)
+        logger.info(f"Using Model A's test set: {len(sample)} samples (same split, same data)")
+
     logger.info(f"Using model: {args.model}")
     logger.info(f"Duration range: {sample['duration_hours'].min():.1f}h - {sample['duration_hours'].max():.1f}h")
 
+    # Load partial results for resume
+    completed = {}
+    if partial_path.exists():
+        try:
+            with open(partial_path) as f:
+                partial = json.load(f)
+            for r in partial:
+                key = f"{r['repo']}#{r['issue_number']}"
+                if r.get("predicted_hours") is not None:
+                    completed[key] = r
+            logger.info(f"Resuming: {len(completed)} predictions already completed")
+        except Exception:
+            pass
+
     # Run predictions
     results = []
+    new_predictions = 0
     for i, (idx, row) in enumerate(sample.iterrows()):
         title = row.get("issue_title", "") or ""
         body = row.get("issue_body", "") or ""
         actual = row["duration_hours"]
         repo = row.get("repo", "?")
         issue_num = row.get("issue_number", "?")
+        key = f"{repo}#{issue_num}"
 
-        logger.info(f"  [{i+1}/{len(sample)}] {repo}#{issue_num} (actual: {actual:.1f}h)")
+        # Skip if already completed (resume support)
+        if key in completed:
+            results.append(completed[key])
+            continue
+
+        logger.info(f"  [{i+1}/{len(sample)}] {key} (actual: {actual:.1f}h)")
 
         hours, reasoning = estimate_with_llm(title, body, model=args.model)
 
@@ -172,18 +240,30 @@ def main():
         else:
             logger.info(f"    Failed: {reasoning}")
 
-        results.append({
+        result_row = {
             "repo": repo,
-            "issue_number": issue_num,
+            "issue_number": int(issue_num) if issue_num != "?" else 0,
             "issue_title": title[:100],
             "actual_hours": actual,
             "predicted_hours": hours,
             "reasoning": reasoning,
-        })
+        }
+        results.append(result_row)
+        new_predictions += 1
 
-        # Rate limiting — be nice to the API
+        # Save partial results every 25 predictions
+        if new_predictions % 25 == 0:
+            with open(partial_path, "w") as f:
+                json.dump(results, f)
+            logger.info(f"  Checkpoint: {len(results)} total ({new_predictions} new)")
+
+        # Rate limiting
         if i < len(sample) - 1:
-            time.sleep(0.5)
+            time.sleep(0.3)
+
+    # Final save of partial results
+    with open(partial_path, "w") as f:
+        json.dump(results, f)
 
     # Filter successful predictions
     results_df = pd.DataFrame(results)
@@ -205,6 +285,8 @@ def main():
     print()
     print("=" * 70)
     print(f"LLM ZERO-SHOT BASELINE ({args.model}, n={len(valid)})")
+    if not args.random:
+        print(f"  Evaluated on Model A's exact test set for fair comparison")
     print("=" * 70)
     print(f"  MAE:      {metrics['mae']:.2f}h")
     print(f"  MdAE:     {metrics['mdae']:.2f}h")
@@ -215,37 +297,49 @@ def main():
     print(f"  SA:       {metrics['sa']:.1f}%")
     print()
 
-    # Compare with Model A (if available)
-    model_a_results = Path("models/model_a_text_only/results.json")
-    if model_a_results.exists():
-        with open(model_a_results) as f:
-            model_a = json.load(f).get("test_metrics", {})
-        if model_a:
-            print("Comparison with Model A (CodeBERT + XGBoost, full test set):")
-            print(f"  {'Metric':<12} {'LLM':>10} {'Model A':>10} {'Delta':>10}")
-            print(f"  {'-'*42}")
-            for key, label in [("mae", "MAE"), ("mdae", "MdAE"), ("sa", "SA"),
-                                ("pred_25", "PRED(25)"), ("r2", "R²")]:
+    # Compare with Model A predictions on the same samples
+    model_a_preds_path = Path("models/model_a_text_only/predictions.csv")
+    model_a_results_path = Path("models/model_a_text_only/results.json")
+
+    if model_a_results_path.exists():
+        with open(model_a_results_path) as f:
+            model_a_meta = json.load(f)
+        model_a_metrics = model_a_meta.get("test_metrics", {})
+
+        if model_a_metrics:
+            print(f"{'='*70}")
+            print("HEAD-TO-HEAD: LLM vs Model A (same test samples)")
+            print(f"{'='*70}")
+            print(f"  {'Metric':<12} {'LLM':>12} {'Model A':>12} {'Winner':>12}")
+            print(f"  {'-'*50}")
+            comparisons = [
+                ("MAE", "mae", True),     # lower is better
+                ("MdAE", "mdae", True),
+                ("PRED(25)", "pred_25", False),  # higher is better
+                ("PRED(50)", "pred_50", False),
+                ("SA", "sa", False),
+                ("R²", "r2", False),
+            ]
+            for label, key, lower_better in comparisons:
                 llm_val = metrics.get(key, 0)
-                ma_val = model_a.get(key, 0)
-                delta = llm_val - ma_val
-                sign = "+" if delta > 0 else ""
-                print(f"  {label:<12} {llm_val:>10.2f} {ma_val:>10.2f} {sign}{delta:>9.2f}")
+                ma_val = model_a_meta.get("test_metrics", {}).get(key, 0)
+                if lower_better:
+                    winner = "LLM" if llm_val < ma_val else "Model A"
+                else:
+                    winner = "LLM" if llm_val > ma_val else "Model A"
+                print(f"  {label:<12} {llm_val:>12.2f} {ma_val:>12.2f} {winner:>12}")
             print()
 
-    # Save
-    out_dir = Path("models/llm_baseline")
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    out = {
+    # Save final results
+    final = {
         "model": args.model,
         "n_samples": len(valid),
         "n_failed": failed,
+        "matched_model_a_test_set": not args.random,
         "metrics": metrics,
-        "predictions": results,
     }
     with open(out_dir / "results.json", "w") as f:
-        json.dump(out, f, indent=2)
+        json.dump(final, f, indent=2)
 
     results_df.to_csv(out_dir / "predictions.csv", index=False)
     logger.info(f"Results saved to {out_dir}")
