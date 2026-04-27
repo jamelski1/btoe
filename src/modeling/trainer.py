@@ -19,6 +19,7 @@ import joblib
 import numpy as np
 import pandas as pd
 from scipy import stats
+from sklearn.cross_decomposition import PLSRegression
 from sklearn.decomposition import PCA
 from sklearn.feature_selection import SelectKBest, f_regression
 from sklearn.model_selection import KFold, cross_val_predict, train_test_split
@@ -188,6 +189,64 @@ class ModelTrainer:
 
         return pd.concat([topk_df, other_df], axis=1)
 
+    def reduce_embeddings_pls(self, X: pd.DataFrame, y: pd.Series,
+                               n_components: int = None) -> tuple:
+        """Apply PLS to embedding columns, keeping derived features intact.
+
+        PLS (Partial Least Squares) finds linear combinations of X that
+        maximize covariance with y — supervised dimensionality reduction.
+        """
+        emb_cols = [c for c in X.columns if c.startswith("emb_")]
+        other_cols = [c for c in X.columns if not c.startswith("emb_")]
+
+        if not emb_cols:
+            logger.info("  No embedding columns found, skipping PLS")
+            return X, None, None
+
+        n_emb = len(emb_cols)
+        if n_components is None:
+            cfg_k = self.config.get("pls", {}).get("n_components", 50)
+            n_components = min(cfg_k, len(X) // 5)
+        n_components = min(n_components, n_emb, len(X))
+
+        logger.info(f"  PLS: reducing {n_emb} embedding dims -> {n_components} components")
+
+        scaler = StandardScaler()
+        emb_scaled = scaler.fit_transform(X[emb_cols])
+
+        pls = PLSRegression(n_components=n_components)
+        emb_pls = pls.fit_transform(emb_scaled, y)[0]
+
+        logger.info(f"  PLS: {n_components} components fitted (supervised on target)")
+
+        pls_cols = [f"pls_{i}" for i in range(n_components)]
+        pls_df = pd.DataFrame(emb_pls, index=X.index, columns=pls_cols)
+        other_df = X[other_cols].reset_index(drop=True)
+        pls_df = pls_df.reset_index(drop=True)
+
+        X_reduced = pd.concat([pls_df, other_df], axis=1)
+        logger.info(f"  Final feature set: {len(pls_cols)} PLS + {len(other_cols)} derived = {X_reduced.shape[1]} features")
+
+        return X_reduced, scaler, pls
+
+    def transform_embeddings_pls(self, X: pd.DataFrame, scaler, pls) -> pd.DataFrame:
+        """Apply a previously fitted PLS transform to new data."""
+        emb_cols = [c for c in X.columns if c.startswith("emb_")]
+        other_cols = [c for c in X.columns if not c.startswith("emb_")]
+
+        if scaler is None or pls is None:
+            return X
+
+        emb_scaled = scaler.transform(X[emb_cols])
+        emb_pls = pls.transform(emb_scaled)
+
+        pls_cols = [f"pls_{i}" for i in range(emb_pls.shape[1])]
+        pls_df = pd.DataFrame(emb_pls, index=X.index, columns=pls_cols)
+        other_df = X[other_cols].reset_index(drop=True)
+        pls_df = pls_df.reset_index(drop=True)
+
+        return pd.concat([pls_df, other_df], axis=1)
+
     def get_search_space(self) -> dict:
         """Define Bayesian optimization search space for XGBoost."""
         return {
@@ -237,31 +296,34 @@ class ModelTrainer:
         logger.info(f"  Target stats (train): mean={y_train.mean():.1f}h, median={y_train.median():.1f}h, std={y_train.std():.1f}h")
         logger.info(f"  Target stats (test):  mean={y_test.mean():.1f}h, median={y_test.median():.1f}h, std={y_test.std():.1f}h")
 
-        # --- Feature selection on embeddings (fit on train only) ---
-        # Selection method: "pca" (default), "topk", or "none" (use all 768 dims)
-        method = self.config.get("feature_selection", {}).get("method", "pca")
-        emb_cols = [c for c in X_train.columns if c.startswith("emb_")]
-
-        if not emb_cols:
-            scaler, pca, selector = None, None, None
-        elif method == "none":
-            logger.info(f"  No dimensionality reduction: using all {len(emb_cols)} embedding dims + "
-                        f"{len(X_train.columns) - len(emb_cols)} derived = {len(X_train.columns)} features")
-            scaler, pca, selector = None, None, None
-        elif method == "topk":
-            X_train, scaler, selector = self.select_topk_embeddings(X_train, y_train)
-            X_test = self.transform_topk_embeddings(X_test, scaler, selector)
-            pca = None
-        else:  # pca (default)
-            X_train, scaler, pca = self.reduce_embeddings(X_train)
-            X_test = self.transform_embeddings(X_test, scaler, pca)
-            selector = None
-
         # --- Log-transform target to handle skewed distribution ---
         y_train_log = np.log1p(y_train)
         y_test_log = np.log1p(y_test)
         logger.info(f"  Log-transformed target: train range [{y_train_log.min():.2f}, {y_train_log.max():.2f}], "
                      f"test range [{y_test_log.min():.2f}, {y_test_log.max():.2f}]")
+
+        # --- Feature selection on embeddings (fit on train only) ---
+        # Selection method: "pca" (default), "topk", "pls", or "none"
+        method = self.config.get("feature_selection", {}).get("method", "pca")
+        emb_cols = [c for c in X_train.columns if c.startswith("emb_")]
+
+        # reducer stores the fitted transform object (PCA, PLS, or SelectKBest)
+        scaler, reducer = None, None
+
+        if not emb_cols:
+            pass
+        elif method == "none":
+            logger.info(f"  No dimensionality reduction: using all {len(emb_cols)} embedding dims + "
+                        f"{len(X_train.columns) - len(emb_cols)} derived = {len(X_train.columns)} features")
+        elif method == "topk":
+            X_train, scaler, reducer = self.select_topk_embeddings(X_train, y_train)
+            X_test = self.transform_topk_embeddings(X_test, scaler, reducer)
+        elif method == "pls":
+            X_train, scaler, reducer = self.reduce_embeddings_pls(X_train, y_train_log)
+            X_test = self.transform_embeddings_pls(X_test, scaler, reducer)
+        else:  # pca (default)
+            X_train, scaler, reducer = self.reduce_embeddings(X_train)
+            X_test = self.transform_embeddings(X_test, scaler, reducer)
 
         # --- Step 2: Bayesian hyperparameter optimization on train set ---
         logger.info(f"  Starting Bayesian optimization ({self.model_cfg['bayes_opt']['n_calls']} iterations, {self.model_cfg['cv_folds']}-fold CV)...")
@@ -350,7 +412,7 @@ class ModelTrainer:
             test_indices=X_test.index.values,
         )
 
-        self._save_result(result, best_model, scaler=scaler, pca=pca, selector=selector)
+        self._save_result(result, best_model, scaler=scaler, reducer=reducer, method=method)
 
         total_elapsed = time.time() - total_start
         logger.info(f"{'='*60}")
@@ -370,21 +432,26 @@ class ModelTrainer:
         logger.info(f"    SA:       {metrics['sa']:.1f}%")
 
     def _save_result(self, result: ModelResult, model: XGBRegressor,
-                      scaler=None, pca=None, selector=None):
+                      scaler=None, reducer=None, method="pca"):
         """Save model artifact and results JSON to disk."""
         model_dir = get_model_dir() / result.name
         model_dir.mkdir(parents=True, exist_ok=True)
 
-        # Save scaler if used
+        # Save scaler and reducer
         if scaler is not None:
             joblib.dump(scaler, model_dir / "scaler.joblib")
-        if pca is not None:
-            joblib.dump(pca, model_dir / "pca.joblib")
-            logger.info(f"  PCA ({pca.n_components_} components, "
-                        f"{pca.explained_variance_ratio_.sum()*100:.1f}% variance) saved")
-        if selector is not None:
-            joblib.dump(selector, model_dir / "selector.joblib")
-            logger.info(f"  Top-K selector ({selector.k} features) saved")
+        if reducer is not None:
+            # Save under a generic name + method-specific name for compatibility
+            joblib.dump(reducer, model_dir / "reducer.joblib")
+            if method == "pca":
+                joblib.dump(reducer, model_dir / "pca.joblib")
+                logger.info(f"  PCA ({reducer.n_components_} components, "
+                            f"{reducer.explained_variance_ratio_.sum()*100:.1f}% variance) saved")
+            elif method == "topk":
+                joblib.dump(reducer, model_dir / "selector.joblib")
+                logger.info(f"  Top-K selector ({reducer.k} features) saved")
+            elif method == "pls":
+                logger.info(f"  PLS ({reducer.n_components} components) saved")
 
         # Save trained model
         model_path = model_dir / "model.joblib"
