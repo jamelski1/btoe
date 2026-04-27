@@ -627,6 +627,8 @@ def step_feature_selection_ablation(config: dict):
     configurations = [
         ("pca", 20),
         ("pca", 50),
+        ("pls", 20),
+        ("pls", 50),
         ("topk", 20),
         ("topk", 50),
         ("none", 768),
@@ -653,6 +655,8 @@ def step_feature_selection_ablation(config: dict):
             cfg.setdefault("pca", {})["n_components"] = k
         elif method == "topk":
             cfg.setdefault("topk", {})["k"] = k
+        elif method == "pls":
+            cfg.setdefault("pls", {})["n_components"] = k
 
         trainer = ModelTrainer(cfg)
         result = trainer.train_and_evaluate(
