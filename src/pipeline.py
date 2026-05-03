@@ -55,6 +55,91 @@ def step_validate(config: dict):
     return results
 
 
+def step_clean_data(config: dict):
+    """Step 1.5: Clean raw dataset by removing known data quality issues.
+
+    Removes:
+    - Repos with < 10 samples (stray/singleton repos)
+    - Empty issue bodies (no text = no signal for NLP)
+    - Samples with 0 files changed (likely data errors)
+    - Duplicate repo+issue_number pairs
+
+    Saves cleaned data back to the same file (backs up original first).
+    """
+    import shutil
+
+    data_dir = get_data_dir()
+    df = _load_raw_data()
+    n_original = len(df)
+
+    logger.info(f"{'='*60}")
+    logger.info(f"Cleaning dataset: {n_original} samples")
+    logger.info(f"{'='*60}")
+
+    # 1. Remove repos with < 10 samples
+    repo_counts = df["repo"].value_counts()
+    small_repos = repo_counts[repo_counts < 10].index.tolist()
+    if small_repos:
+        n_before = len(df)
+        df = df[~df["repo"].isin(small_repos)]
+        logger.info(f"  Dropped {n_before - len(df)} samples from small repos: {small_repos}")
+
+    # 2. Remove empty issue bodies
+    empty_body_mask = df["issue_body"].fillna("").str.strip() == ""
+    n_empty = empty_body_mask.sum()
+    if n_empty > 0:
+        df = df[~empty_body_mask]
+        logger.info(f"  Dropped {n_empty} samples with empty issue_body")
+
+    # 3. Remove 0 files changed
+    if "num_files_changed" in df.columns:
+        zero_files = (df["num_files_changed"] == 0).sum()
+        if zero_files > 0:
+            df = df[df["num_files_changed"] > 0]
+            logger.info(f"  Dropped {zero_files} samples with 0 files changed")
+
+    # 4. Deduplicate
+    n_before = len(df)
+    df = df.drop_duplicates(subset=["repo", "issue_number"], keep="first")
+    n_dupes = n_before - len(df)
+    if n_dupes > 0:
+        logger.info(f"  Dropped {n_dupes} duplicate repo+issue_number pairs")
+
+    df = df.reset_index(drop=True)
+    n_final = len(df)
+    n_removed = n_original - n_final
+
+    logger.info(f"\n  Summary: {n_original} -> {n_final} samples ({n_removed} removed, {n_removed/n_original*100:.1f}%)")
+
+    # Show final per-repo breakdown
+    logger.info(f"\n  Final per-repo distribution:")
+    for repo, count in df["repo"].value_counts().items():
+        logger.info(f"    {repo}: {count} ({count/n_final*100:.1f}%)")
+
+    # Backup original and save cleaned version
+    raw_path = data_dir / "raw" / "issue_pr_pairs.parquet"
+    backup_path = data_dir / "raw" / "issue_pr_pairs_pre_clean.parquet"
+
+    if raw_path.exists() and not backup_path.exists():
+        shutil.copy2(raw_path, backup_path)
+        logger.info(f"\n  Original backed up to {backup_path}")
+
+    try:
+        df.to_parquet(raw_path, index=False)
+    except ImportError:
+        csv_path = raw_path.with_suffix(".csv")
+        df.to_csv(csv_path, index=False)
+        raw_path = csv_path
+
+    logger.info(f"  Cleaned data saved to {raw_path}")
+    logger.info(f"\n  NEXT STEPS: re-extract features and retrain:")
+    logger.info(f"    python -m src.pipeline --step nlp_features")
+    logger.info(f"    python -m src.pipeline --step train")
+    logger.info(f"{'='*60}")
+
+    return df
+
+
 def step_collect(config: dict):
     """Step 2: Mine issue-PR pairs from validated repositories."""
     from src.data_collection.github_miner import GitHubMiner
@@ -1149,7 +1234,7 @@ def main():
     parser = argparse.ArgumentParser(description="SE3M Replication Study Pipeline")
     parser.add_argument(
         "--step",
-        choices=["validate", "collect", "merge_data", "data_quality",
+        choices=["validate", "collect", "merge_data", "clean_data", "data_quality",
                  "features", "nlp_features",
                  "repo_features", "train_model_a", "train", "analyze",
                  "error_analysis", "examples", "sensitivity",
@@ -1187,6 +1272,7 @@ def main():
         "validate": step_validate,
         "collect": step_collect,
         "merge_data": lambda c: step_merge_data(c, merge_path=args.merge_from),
+        "clean_data": step_clean_data,
         "data_quality": lambda c: __import__("src.analysis.data_quality", fromlist=["run_data_quality_report"]).run_data_quality_report(),
         "features": step_features,
         "nlp_features": step_nlp_features,
