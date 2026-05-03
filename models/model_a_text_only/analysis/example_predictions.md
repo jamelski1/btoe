@@ -1,6 +1,6 @@
 # Example Predictions — Model A (model_a_text_only)
 
-Test set: 896 samples
+Test set: 865 samples
 
 For each actual-duration bucket, this report shows:
 - **3 best predictions** (smallest relative error)
@@ -8,412 +8,324 @@ For each actual-duration bucket, this report shows:
 
 ---
 
-## Actual bucket: **< 1 day** (86 samples)
+## Actual bucket: **< 1 day** (72 samples)
 
-*Median absolute error: 2.9d, median relative error: 2406%*
+*Median absolute error: 3.3d, median relative error: 2522%*
 
 ### Best 3 predictions (most accurate)
 
-**kubernetes/kubernetes #136091** — Standard numeric format validation (int32, int64, float, double) is not enforced in CRDs
+**microsoft/vscode #255787** — Workspace chat history should format file references better
 
-- Actual: **5.7h** (5.7h, bucket: < 1 day)
-- Predicted: **21.8h** (21.8h, bucket: 1 day)
-- Error: 16.1h (283% off)
-- Files changed: 66
+- Actual: **7.9h** (7.9h, bucket: < 1 day)
+- Predicted: **1.3d** (31.6h, bucket: 1-3 days)
+- Error: 23.8h (302% off)
+- Files changed: 1
+
+> <img width="740" height="282" alt="Image" src="https://github.com/user-attachments/assets/fb8f6cd6-d111-4305-99f4-f6bb3ba07583" />
+
+**microsoft/vscode #254880** — Undoing with a `Try again` action in the history doesn't make it dissapear
+
+- Actual: **7.7h** (7.7h, bucket: < 1 day)
+- Predicted: **1.6d** (39.5h, bucket: 1-3 days)
+- Error: 1.3d (414% off)
+- Files changed: 1
+
+> At some point the agent failed to edit further
+<img width="404" height="623" alt="Image" src="https://github.com/user-attachments/assets/0da3b2ad-2f26-48ee-aee2-0ba2ae979464" />
+If I clicked Undo a few times, that error message staying in the chat:
+<img width="553" height="498" alt="Image" src="https://github.com/user-attachments/assets/cb8fc15c-982c-44bb-935c-f102d8893c85" />
+
+**microsoft/vscode #301997** — Chat image carousel doesn't always show title
+
+- Actual: **3.0h** (3.0h, bucket: < 1 day)
+- Predicted: **16.5h** (16.5h, bucket: 1 day)
+- Error: 13.5h (445% off)
+- Files changed: 2
+
+> Testing #301610
+Opened the image carousel from a chat, but it doesn't always have a title in the top left. I couldn't figure out how to reproduce this though.
+<img width="1392" height="1294" alt="Image" src="https://github.com/user-attachments/assets/98309d72-cdc4-4aae-a1ea-22a9373ce9be" />
+<img width="1393" height="1322" alt="Image" src="https://github.com/user-attachments/assets/06d12172-e671-4e...
+
+### Worst 3 predictions (least accurate)
+
+**microsoft/vscode #253363** — Opening secondary sidebar in new workspaces should skip web
+
+- Actual: **2.0h** (2.0h, bucket: < 1 day)
+- Predicted: **5.3d** (126.8h, bucket: 3-7 days)
+- Error: 5.2d (6346% off)
+- Files changed: 3
+
+> fyi @isidorn a result of the experiment
+<img width="418" alt="Image" src="https://github.com/user-attachments/assets/4bd3891d-42ac-4e97-80d1-7919d6d78a95" />
+In vscode.dev/github.dev the secondary sidebar is empty.
+
+**kubernetes/kubernetes #136527** — Job validation error message is misleading when updating .status.startTime
+
+- Actual: **2.4h** (2.4h, bucket: < 1 day)
+- Predicted: **6.2d** (147.8h, bucket: 3-7 days)
+- Error: 6.1d (6094% off)
+- Files changed: 3
 
 > ### What happened?
-CRDs that use standard numeric formats for both integer and number types do not actually enforce these constraints during validation. 
-This is a follow up issue of https://github.com/kubernetes/kubernetes/issues/133880
-### What did you expect to happen?
-Reject invalid integer/number following the defined formats.
-### How can we reproduce it (as minimally and precisely as possibl...
+I encountered a confusing validation error while trying to update the `.status.startTime` of an existing  
+Job.
+The error message received was:
+```bash
+Job.batch "job-c4nbt" is invalid: status.startTime: Required value: startTime cannot be removed for unsuspended job
+```
+However, I am not trying to remove the `startTime`, but rather update it. I checked the code and found that t...
 
-**kubernetes/kubernetes #27785** — Panic in DNS Zone Creation: interface conversion: interfaces.ManagedZone is *internal.ManagedZone,  not internal.ManagedZone
+**facebook/react #9102** — [Fiber] Check for requestAnimationFrame throws when react-dom is required on the server
 
-- Actual: **6.3h** (6.3h, bucket: < 1 day)
-- Predicted: **1.7d** (41.1h, bucket: 1-3 days)
-- Error: 1.5d (555% off)
-- Files changed: 8
-
-> See https://github.com/kubernetes/kubernetes/pull/27695#issuecomment-227488419
-Fix PR incoming shortly.
-cc: @mml FYI.
-
-**microsoft/vscode #270394** — .interactive-session styles should not be in chatViewWelcome.css
-
-- Actual: **6.6h** (6.6h, bucket: < 1 day)
-- Predicted: **1.9d** (45.3h, bucket: 1-3 days)
-- Error: 1.6d (582% off)
-- Files changed: 2
-
-> I just noticed this while looking at quick chat- we now have these styles for `.interactive-session` in the welcome views css file https://github.com/microsoft/vscode/blob/3ec367371fdb761eaf951bfeeb9b68b61272d21c/src/vs/workbench/contrib/chat/browser/media/chatViewWelcome.css#L18-L21
-But we also have styles for the same selector in chat.css https://github.com/microsoft/vscode/blob/3ec367371fdb761e...
-
-### Worst 3 predictions (least accurate)
-
-**microsoft/vscode #243115** — Selecting `file` from context picker with mouse is a no-op
-
-- Actual: **1.7h** (1.7h, bucket: < 1 day)
-- Predicted: **8.2d** (196.9h, bucket: 1-4 weeks)
-- Error: 8.1d (11628% off)
+- Actual: **3.5h** (3.5h, bucket: < 1 day)
+- Predicted: **9.0d** (216.5h, bucket: 1-4 weeks)
+- Error: 8.9d (6057% off)
 - Files changed: 3
 
-> Click this with a mouse:
-<img width="1124" alt="Image" src="https://github.com/user-attachments/assets/44b71a95-db3a-4e33-bd21-c1f3a25bc14f" />
-This closes quick pick right away making it seem like a no-op
-//cc @isidorn
-
-**microsoft/vscode #282527** — Agent sessions: make sidebar toggle visible even in chats
-
-- Actual: **2.2h** (2.2h, bucket: < 1 day)
-- Predicted: **9.6d** (229.4h, bucket: 1-4 weeks)
-- Error: 9.5d (10267% off)
-- Files changed: 5
-
-> When you are in a chat, we show a title:
-<img width="571" height="440" alt="Image" src="https://github.com/user-attachments/assets/f415fbd4-f9f6-4264-a197-cce8bea5205f" />
-In here the top right should show the sidebar toggle.
-//cc @rebornix
-
-**kubernetes/kubernetes #84783** — cpumanager: cpu manager state checkpoint file validate failed after node crash or kubelet down
-
-- Actual: **1.3h** (1.3h, bucket: < 1 day)
-- Predicted: **5.4d** (130.5h, bucket: 3-7 days)
-- Error: 5.4d (9997% off)
-- Files changed: 12
-
-> <!-- Please use this template while reporting a bug and provide as much info as possible. Not doing so may result in your bug not being addressed in a timely manner. Thanks!
-If the matter is security related, please disclose it privately via https://kubernetes.io/security/
--->
-
-**What happened**:
-Currently, static policy in cpumanager validate state checkpoint file when kubelet starts if cpu bindi...
+> **Do you want to request a *feature* or report a *bug*?**
+Bug-ish
+**What is the current behavior?**
+When doing server-side rendering with React, requiring `react-dom` (which transitively requires `ReactDOMFrameScheduling.js`) throws an exception because rAF is not defined.
+```
+Invariant Violation: React depends on requestAnimationFrame. Make sure that you load a polyfill in older browsers.
+    at...
 
 ---
 
-## Actual bucket: **1 day** (90 samples)
+## Actual bucket: **1 day** (91 samples)
 
-*Median absolute error: 3.4d, median relative error: 512%*
+*Median absolute error: 3.6d, median relative error: 578%*
 
 ### Best 3 predictions (most accurate)
 
-**kubernetes/kubernetes #135001** — failing kubelet skew jobs with kubeadm (kinder)
+**microsoft/vscode #247672** — Chat: Add consistent icon order across modes
 
-- Actual: **21.5h** (21.5h, bucket: 1 day)
-- Predicted: **1.1d** (26.8h, bucket: 1-3 days)
-- Error: 5.3h (25% off)
-- Files changed: 2
-
-> ### Which jobs are failing?
-https://testgrid.k8s.io/sig-cluster-lifecycle-kubeadm#kubeadm-kinder-kubelet-1-33-on-latest
-https://testgrid.k8s.io/sig-cluster-lifecycle-kubeadm#kubeadm-kinder-kubelet-1-32-on-latest
-
-### Which tests are failing?
-Kubernetes e2e suite.[It] [sig-node] Pods Extended (pod generation) Pod Generation issue 500 podspec updates and verify generation and observedGeneration even...
-
-**microsoft/vscode #243228** — MCP: Install via protocol activation
-
-- Actual: **16.9h** (16.9h, bucket: 1 day)
-- Predicted: **21.9h** (21.9h, bucket: 1 day)
-- Error: 5.1h (30% off)
-- Files changed: 5
-
-> We've had some asks from registries to support protocol activation as a way to install MCP servers (i.e. via a link.) Let's support this.
-Tentatively assigning to this month but it's not as high a priority item.
-
-**microsoft/vscode #248317** — Settings auto save reset the scroll and selected feature
-
-- Actual: **23.9h** (23.9h, bucket: 1 day)
-- Predicted: **1.5d** (36.9h, bucket: 1-3 days)
-- Error: 13.0h (55% off)
+- Actual: **18.2h** (18.2h, bucket: 1 day)
+- Predicted: **23.1h** (23.1h, bucket: 1 day)
+- Error: 4.9h (27% off)
 - Files changed: 1
 
-> <!-- ⚠️⚠️ Do Not Delete This! bug_report_template ⚠️⚠️ -->
+> <!-- ⚠️⚠️ Do Not Delete This! feature_request_template ⚠️⚠️ -->
 <!-- Please read our Rules of Conduct: https://opensource.microsoft.com/codeofconduct/ -->
-<!-- 🕮 Read our guide about submitting issues: https://github.com/microsoft/vscode/wiki/Submitting-Bugs-and-Suggestions -->
-<!-- 🔎 Search existing issues to avoid creating duplicates. -->
-<!-- 🧪 Test using the latest Insiders build to see if your iss...
+<!-- Please search existing issues to avoid creating duplicates. -->
+While testing https://github.com/microsoft/vscode/issues/247399, I noticed that there's an inconsistent order of icons when switching between modes.
+Namely, the voice chat icon...
 
-### Worst 3 predictions (least accurate)
+**kubernetes/kubernetes #135894** — job integration: TestUpdateJobPodResources "field is immutable" flake
 
-**microsoft/vscode #301672** — Sessions: progress bar when session loads goes through the previous content
-
-- Actual: **10.7h** (10.7h, bucket: 1 day)
-- Predicted: **2.1w** (351.1h, bucket: 1-4 weeks)
-- Error: 2.0w (3196% off)
+- Actual: **21.1h** (21.1h, bucket: 1 day)
+- Predicted: **1.6d** (38.4h, bucket: 1-3 days)
+- Error: 17.3h (82% off)
 - Files changed: 1
-
-> Often seeing a progress bar appearing when opening a session that travels through the previous content. It seems weirdly aligned.
-
-**microsoft/vscode #243372** — Tree sitter loses coloring when moving lines up and down
-
-- Actual: **8.2h** (8.2h, bucket: 1 day)
-- Predicted: **10.1d** (242.7h, bucket: 1-4 weeks)
-- Error: 9.8d (2860% off)
-- Files changed: 1
-
-> File: https://github.com/microsoft/vscode/blob/d7d36053045528f020a40ce519b162673b9ed5a9/src/vs/workbench/contrib/terminal/browser/xterm/xtermTerminal.ts#L242
-![Image](https://github.com/user-attachments/assets/afd45ef5-a1a0-4001-ad9b-7d78aed2314e)
-
-**kubernetes/kubernetes #3640** — Round robin load balancer can overwhelm first pod behind service
-
-- Actual: **10.4h** (10.4h, bucket: 1 day)
-- Predicted: **12.3d** (296.1h, bucket: 1-4 weeks)
-- Error: 11.9d (2745% off)
-- Files changed: 4
-
-> This is particularly easy to do with a new cluster.
-Create a service `S` and deploy `N` pods behind it. Start up `M` pods which create a persistent connection to service `S`.
-Because the round robin load balancer always starts at the 0th endpoint, and the endpoint list is consistent cluster-wide, you will see that you now have `M` connections to Pod 1, and 0 connections to all other pods 2 through...
-
----
-
-## Actual bucket: **1-3 days** (157 samples)
-
-*Median absolute error: 3.0d, median relative error: 177%*
-
-### Best 3 predictions (most accurate)
-
-**kubernetes/kubernetes #136473** — Extend DRA performance tests to cover implicit resources
-
-- Actual: **1.3d** (32.3h, bucket: 1-3 days)
-- Predicted: **1.4d** (33.5h, bucket: 1-3 days)
-- Error: 1.2h (4% off)
-- Files changed: 3
-
-> [Current performance tests](https://github.com/kubernetes/kubernetes/blob/master/test/integration/scheduler_perf/dra/extendedresource/extendedresource_test.go) cover only explicit extended resources. It would be nice to extend them to cover also implicit resources. This would allow to measure and compare testing results for both types of resources.
-/sig scheduling
-
-**microsoft/vscode #247649** — Quick pick padding is inconsistent
-
-- Actual: **2.9d** (69.7h, bucket: 1-3 days)
-- Predicted: **3.0d** (72.9h, bucket: 3-7 days)
-- Error: 3.2h (5% off)
-- Files changed: 1
-
-> <img width="347" alt="Image" src="https://github.com/user-attachments/assets/7622df49-59fd-4c7b-ac66-aaf9bf0fed88" />
-- Top padding is larger than left padding
-- Input border doesn't align horizontally with the selected item background - I don't see why it wouldn't
-
-**kubernetes/kubernetes #5278** — Kind wildcarding/discovery in kubectl
-
-- Actual: **1.8d** (42.7h, bucket: 1-3 days)
-- Predicted: **1.9d** (44.7h, bucket: 1-3 days)
-- Error: 2.1h (5% off)
-- Files changed: 7
-
-> Forked from #3233.
-I think the last proposal was to support:
-```
-kubectl describe all
-kubectl describe all foo
-```
-where "all" implies all known kinds.
-@brendandburns @smarterclayton
-
-### Worst 3 predictions (least accurate)
-
-**kubernetes/kubernetes #73264** — --cpu-cfs-quota-period should not have effect if feature gate CPUCFSQuotaPeriod is not enabled
-
-- Actual: **1.2d** (29.7h, bucket: 1-3 days)
-- Predicted: **3.4w** (578.6h, bucket: 1-4 weeks)
-- Error: 3.3w (1848% off)
-- Files changed: 2
-
-> <!-- Please use this template while reporting a bug and provide as much info as possible. Not doing so may result in your bug not being addressed in a timely manner. Thanks!-->
-
-**What happened**:
-When run kubelet with "--cpu-cfs-quota-period 1000ms"  and without --feature-gates=CustomCPUCFSQuotaPeriod=true, kubelet would set cgroup cpu.cfs_period_us to 1000000, but make calculation based on a def...
-
-**microsoft/vscode #268390** — Secondary side bar shouldnt open by default in vscode.dev
-
-- Actual: **1.7d** (41.2h, bucket: 1-3 days)
-- Predicted: **3.6w** (609.7h, bucket: 1-4 weeks)
-- Error: 3.4w (1379% off)
-- Files changed: 1
-
-> When we switched to show the secondary side bar with the walkthrough or in a new workspace, this is also getting applied in vscode.dev. We shouldn't open the secondary side bar in these scenarios as Copilot is not supported
-<img width="2540" height="1382" alt="Image" src="https://github.com/user-attachments/assets/57c03b29-9abd-4ffa-b7ae-5472750e80db" />
-Thanks @kieferrm for pointing this out!
-
-**kubernetes/kubernetes #135963** — [Flake] test/integration/servicecidr: TestServiceAllocation fails with "range is full"
-
-- Actual: **2.0d** (48.2h, bucket: 1-3 days)
-- Predicted: **3.0w** (507.5h, bucket: 1-4 weeks)
-- Error: 2.7w (953% off)
-- Files changed: 2
 
 > ### Which jobs are flaking?
-ci-kubernetes-integration-master
+ci-kubernetes-integration-master and similar jobs for other platforms.
+https://storage.googleapis.com/k8s-triage/index.html?text=field%20is%20immutable&test=k8s.io%2Fkubernetes%2Ftest%2Fintegration
+
 ### Which tests are flaking?
-k8s.io/kubernetes/test/integration/servicecidr TestServiceAllocation/IP_allocator_only
-### Since when has it been flaking?
-Observed on Dec 28, 2025
-### Testgrid link
-https://testgrid.k8s.io/sig-release-master-blocking#integration-master
-### Reason for failure (if possible)
-The test fails with an IP exhaustion...
+`TestUpdateJobPodResources/suspended_job,_feature_gate_enabled,_update_resources` in test/integration/job.
 
----
+### Since when has it been flaking?...
 
-## Actual bucket: **3-7 days** (133 samples)
+**facebook/react #1049** — jsx-compiler.html shouldn't show Live/Compiled switcher
 
-*Median absolute error: 2.0d, median relative error: 43%*
-
-### Best 3 predictions (most accurate)
-
-**microsoft/vscode #235819** — Switching code editor tabs slow in workspace with many tests (~150,000)
-
-- Actual: **5.9d** (140.7h, bucket: 3-7 days)
-- Predicted: **6.0d** (143.0h, bucket: 3-7 days)
-- Error: 2.3h (2% off)
+- Actual: **22.7h** (22.7h, bucket: 1 day)
+- Predicted: **1.8d** (44.4h, bucket: 1-3 days)
+- Error: 21.7h (96% off)
 - Files changed: 2
 
-> <!-- ⚠️⚠️ Do Not Delete This! bug_report_template ⚠️⚠️ -->
-<!-- Please read our Rules of Conduct: https://opensource.microsoft.com/codeofconduct/ -->
-<!-- 🕮 Read our guide about submitting issues: https://github.com/microsoft/vscode/wiki/Submitting-Bugs-and-Suggestions -->
-<!-- 🔎 Search existing issues to avoid creating duplicates. -->
-<!-- 🧪 Test using the latest Insiders build to see if your iss...
-
-**kubernetes/kubernetes #136350** — Image build is failing - post-kubernetes-push-e2e-node-perf-npb-is-test-images
-
-- Actual: **4.7d** (111.9h, bucket: 3-7 days)
-- Predicted: **4.7d** (113.9h, bucket: 3-7 days)
-- Error: 2.0h (2% off)
-- Files changed: 5
-
-> Please see logs in:
-https://storage.googleapis.com/kubernetes-ci-logs/logs/post-kubernetes-push-e2e-node-perf-npb-is-test-images/2011957383982485504/build-log.txt
-Log snippet:
-```
-#6 0.460 W: The repository 'http://security.debian.org/debian-security stretch/updates Release' does not have a Release file.
-#6 0.460 W: The repository 'http://deb.debian.org/debian stretch Release' does not have a Rele...
-
-**microsoft/vscode #240307** — MSAL Authentication: throws error around decrypting data - Error Code 2148073483
-
-- Actual: **5.8d** (139.9h, bucket: 3-7 days)
-- Predicted: **6.0d** (144.8h, bucket: 3-7 days)
-- Error: 4.9h (4% off)
-- Files changed: 2
-
-> # Edit from maintainer
-Hi, I got a response from someone who has given me a potential workaround for this DPAPI issue.
-* Delete the directory: `%userprofile%\AppData\Local\Microsoft\IdentityCache`
-* Try signing in with `msal` again
----
-# Original issue filed
-During the sign in to Azure process with the new msal authentication and extension `ms-azuretools.vscode-azureresourcegroups` Version 0.10.4,...
+> http://facebook.github.io/react/jsx-compiler.html
+@chenglou
 
 ### Worst 3 predictions (least accurate)
 
-**microsoft/vscode #244403** — Notebook snapshot not restored when reloading VS Code
+**microsoft/vscode #264515** — Double click in empty Chat Sessions list should add new session
 
-- Actual: **3.3d** (79.1h, bucket: 3-7 days)
-- Predicted: **12.2d** (293.2h, bucket: 1-4 weeks)
-- Error: 8.9d (271% off)
-- Files changed: 1
-
-> <!-- ⚠️⚠️ Do Not Delete This! bug_report_template ⚠️⚠️ -->
-<!-- Please read our Rules of Conduct: https://opensource.microsoft.com/codeofconduct/ -->
-<!-- 🕮 Read our guide about submitting issues: https://github.com/microsoft/vscode/wiki/Submitting-Bugs-and-Suggestions -->
-<!-- 🔎 Search existing issues to avoid creating duplicates. -->
-<!-- 🧪 Test using the latest Insiders build to see if your iss...
-
-**microsoft/vscode #248686** — Move away and remove duplicated utilities functions
-
-- Actual: **3.7d** (89.5h, bucket: 3-7 days)
-- Predicted: **13.6d** (327.1h, bucket: 1-4 weeks)
-- Error: 9.9d (265% off)
-- Files changed: 10
-
-> https://github.com/microsoft/vscode/pull/248685 deprecates some utils that duplicate existing function. Their usages should be adopted/fixed and ultimately the duplicates should be removed
-
-**kubernetes/kubernetes #18606** — Reconcile testing docs
-
-- Actual: **3.2d** (76.1h, bucket: 3-7 days)
-- Predicted: **11.2d** (269.2h, bucket: 1-4 weeks)
-- Error: 8.0d (254% off)
+- Actual: **10.2h** (10.2h, bucket: 1 day)
+- Predicted: **13.1d** (315.3h, bucket: 1-4 weeks)
+- Error: 12.7d (2980% off)
 - Files changed: 2
 
-> https://github.com/kubernetes/kubernetes/pull/14112 introduced [docs/devel/e2e-tests.md](https://github.com/kubernetes/kubernetes/blob/master/docs/devel/e2e-tests.md), but that document isn't correct, and contradicts the information in [docs/devel/development.md](https://github.com/kubernetes/kubernetes/blob/master/docs/devel/development.md).  These two docs should be reconciled.
+> Double click in empty Explorer area creates a new empty file (same effect as +)
+Same pattern should be followed for all views in the Chat Sessions view container. E.g. clicking on an empty space in Claude Code should just create a new claude code session.
+fyi @jo-oikawa @roblourens
+
+**kubernetes/kubernetes #21777** — e2e script refactor broke ubernetes-lite e2e tests
+
+- Actual: **13.3h** (13.3h, bucket: 1 day)
+- Predicted: **2.2w** (364.5h, bucket: 1-4 weeks)
+- Error: 2.1w (2643% off)
+- Files changed: 1
+
+> #21524 broke ubernetes-lite e2e tests.  PR to fix incoming.
+Specifically:
+https://github.com/kubernetes/kubernetes/blob/ac644e03bd6acb322beb66e0e51c2dba1051dfcd/hack/jenkins/job-configs/kubernetes-e2e.yaml#L159
+setting KUBE_GCE_ZONE to an empty string causes it to be defaulted to (currently) "us-central1-b" rather than the zone in which the master components reside, leading to the following error:...
+
+**kubernetes/kubernetes #27657** — GCE Multizone: Cannot create volumes in non-master zones
+
+- Actual: **23.3h** (23.3h, bucket: 1 day)
+- Predicted: **3.4w** (571.1h, bucket: 1-4 weeks)
+- Error: 3.3w (2355% off)
+- Files changed: 9
+
+> Due to #27656, users are unable to create volumes in non-master zones.  The volume cannot be found, and so effectively only one zone is usable for persistent storage (or, in the case of HA master, none of them are).
+Fix coming in the next hour or so...
 
 ---
 
-## Actual bucket: **1-4 weeks** (263 samples)
+## Actual bucket: **1-3 days** (150 samples)
 
-*Median absolute error: 9.2d, median relative error: 65%*
+*Median absolute error: 3.3d, median relative error: 176%*
 
 ### Best 3 predictions (most accurate)
 
-**kubernetes/kubernetes #26435** — Node e2e does not return error from copying test artifacts
+**kubernetes/kubernetes #370** — Unable to start example app before enabling the cloud storage API
 
-- Actual: **8.3d** (198.6h, bucket: 1-4 weeks)
-- Predicted: **8.3d** (200.2h, bucket: 1-4 weeks)
-- Error: 1.6h (1% off)
+- Actual: **1.3d** (32.1h, bucket: 1-3 days)
+- Predicted: **1.3d** (31.8h, bucket: 1-3 days)
+- Error: 21 min (1% off)
 - Files changed: 1
 
-**microsoft/vscode #284011** — Flip defaults for chat.restoreLastPanelSession
+> Before enabling the cloud storage API, I'm unable to launch the test cluster. dev-build-and-up.sh appears to run successfully, but hangs at the end as the machines have not been properly configured. 
+From /var/log/startupscript.log on the kubernetes-master:
+AccessDeniedException: 403 Access Not Configured. Please go to the Google Developers Console (https://cloud.google.com/console#/project) for y...
 
-- Actual: **7.9d** (188.5h, bucket: 1-4 weeks)
-- Predicted: **7.8d** (186.3h, bucket: 1-4 weeks)
-- Error: 2.2h (1% off)
+**microsoft/vscode #247486** — Transfer chat session only works on new workspace
+
+- Actual: **3.0d** (70.8h, bucket: 1-3 days)
+- Predicted: **2.9d** (70.0h, bucket: 1-3 days)
+- Error: 50 min (1% off)
 - Files changed: 1
 
-> Default should be `false`.
-Just ExP control does not get all users. So the defaults should change.
-If you are up for it - consider as a candidate (I am fine if we do it in Dec/Jan milestone).
+> - From a workspace with files in it, ask Copilot Chat to create a new project
+- Go through the new workspace flow- it asks you to open an empty folder
+- Pick an empty folder that has never been opened in vscode before
+- New workspace flow works, continues setting up project 👍 
+- But, if you pick an empty folder that you have used before, chat view is broken and empty
+When switching to use the `Cha...
 
-**kubernetes/kubernetes #135247** — [Failing Test] [sig-node] ImageVolume should succeed with pod and pull policy of Always [MinimumKubeletVersion:1.35]
+**facebook/react #988** — support form novalidate attribute
 
-- Actual: **4.2w** (698.7h, bucket: 1-4 weeks)
-- Predicted: **4.1w** (688.3h, bucket: 1-4 weeks)
-- Error: 10.4h (1% off)
+- Actual: **2.5d** (61.0h, bucket: 1-3 days)
+- Predicted: **2.5d** (59.8h, bucket: 1-3 days)
+- Error: 1.2h (2% off)
 - Files changed: 1
+
+> Using v0.8, the `novalidate` attribute on a `form` component gets stripped. Could we add it to the whitelisted attributes?
+More info about the attribute here:
+http://www.w3.org/TR/html5/forms.html#attr-fs-novalidate
+
+### Worst 3 predictions (least accurate)
+
+**microsoft/vscode #297689** — 'Open Chat Customizations' button is too much
+
+- Actual: **1.4d** (32.5h, bucket: 1-3 days)
+- Predicted: **2.5w** (427.2h, bucket: 1-4 weeks)
+- Error: 2.3w (1216% off)
+- Files changed: 13
+
+> Whenever instructions/skill/agent file open in an editor, the button 'Open Chat Customizations` shows up.
+<img width="931" height="539" alt="Image" src="https://github.com/user-attachments/assets/e7f5dcd5-595c-43b8-bc9d-b9a4656925fb" />
+I think its too much and should be removed
+- It's not an action that I would typically invoke when editing in a prompt file
+- It looks lost
+
+**kubernetes/kubernetes #135822** — TestReplaceEvents is flaky
+
+- Actual: **1.1d** (25.6h, bucket: 1-3 days)
+- Predicted: **12.8d** (306.4h, bucket: 1-4 weeks)
+- Error: 11.7d (1095% off)
+- Files changed: 1
+
+> ### Which jobs are flaking?
+TestReplaceEvents in client-go https://github.com/kubernetes/kubernetes/blame/bb52ae5e24a4eb118460e8feadee86b9f41b4244/staging/src/k8s.io/client-go/tools/cache/controller_test.go#L901 is flaking and failed in the smoke tests run as part of kubernetes/publishing-bot
+### Which tests are flaking?
+TestReplaceEvents/Delete_all_objects
+Ref: https://github.com/kubernetes/kuber...
+
+**kubernetes/kubernetes #34491** — vSphere cloud provider: re-use session for vCenter logins
+
+- Actual: **1.1d** (27.5h, bucket: 1-3 days)
+- Predicted: **13.1d** (313.9h, bucket: 1-4 weeks)
+- Error: 11.9d (1040% off)
+- Files changed: 2
+
+> **Kubernetes version**:
+1.3+
+**Environment**:
+- **Cloud provider or hardware configuration**: vSphere
+vSphere cloud provider creates will create a new login session each and every time the plugin is invoked.  This creates a substantial login/logoffs attempts in vCenter which can impact performance and stability.  The session should be re-used if possible instead of creating a new one each time.
+
+---
+
+## Actual bucket: **3-7 days** (137 samples)
+
+*Median absolute error: 2.8d, median relative error: 61%*
+
+### Best 3 predictions (most accurate)
+
+**kubernetes/kubernetes #136031** — [Failing-test] Kubelet panic in NodeDeclareFeatures code
+
+- Actual: **5.8d** (140.1h, bucket: 3-7 days)
+- Predicted: **5.9d** (141.7h, bucket: 3-7 days)
+- Error: 1.7h (1% off)
+- Files changed: 2
 
 > ### Which jobs are failing?
-* sig-release-master-blocking
-* gce-cos-master-default
+alpha jobs
 ### Which tests are failing?
-* [Kubernetes e2e suite.[It] [sig-node] ImageVolume should succeed with pod and pull policy of Always [MinimumKubeletVersion:1.35]](https://prow.k8s.io/view/gs/kubernetes-ci-logs/logs/ci-kubernetes-e2e-gci-gce/1988078996033638400)
+Entire job.
+
 ### Since when has it been failing?
-* First failure: Sun,...
+Test grid for some reason doesn't go very far back.
+### Testgrid link
+https://testgrid.k8s.io/sig-node-containerd#ci-node-e2e-containerd-alpha-features
+### Reason for failure (if possible)
+```
+I0105 07:36:00.527576    2667 kubelet.go:2611] "SyncLoop DELETE" source="api" pods=["mirro...
 
-### Worst 3 predictions (least accurate)
+**kubernetes/kubernetes #134789** — (DRA) Requests field not set for config FromClass in ResourceClaim.status.allocation.devices.config
 
-**kubernetes/kubernetes #135825** — Kubelet SyncTerminatedPod times out after 30s due to race with cleanupOrphanedPodCgroups
-
-- Actual: **7.7d** (185.2h, bucket: 1-4 weeks)
-- Predicted: **3.4w** (577.9h, bucket: 1-4 weeks)
-- Error: 2.3w (212% off)
-- Files changed: 34
+- Actual: **4.5d** (107.6h, bucket: 3-7 days)
+- Predicted: **4.4d** (106.2h, bucket: 3-7 days)
+- Error: 1.5h (1% off)
+- Files changed: 4
 
 > ### What happened?
-In this [OpenShift CI run](https://prow.ci.openshift.org/view/gs/test-platform-results/logs/periodic-ci-openshift-multiarch-master-nightly-4.21-ocp-e2e-ovn-remote-s2s-libvirt-ppc64le/1999572809340162048), the upstream `[sig-node] Lifecycle sleep action zero value when create a pod with lifecycle hook using sleep action with a duration of zero seconds prestop hook using sleep act...
+When creating a ResourceClaim with 2 requests with 2 different device class that have a config, the config reported in the allocation devices status is not mentioning from which request the config is coming from. So the DRA-Drivers cannot identify the configuration belonging to the request it is supposed to handle.
+```yaml
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaim
+metad...
 
-**microsoft/vscode #244637** — confusing default configuration value
+**kubernetes/kubernetes #137687** — beta-feature enabled clusters are broken in master
 
-- Actual: **8.8d** (210.7h, bucket: 1-4 weeks)
-- Predicted: **2.9w** (483.1h, bucket: 1-4 weeks)
-- Error: 11.4d (129% off)
-- Files changed: 5
+- Actual: **5.2d** (123.6h, bucket: 3-7 days)
+- Predicted: **5.3d** (126.2h, bucket: 3-7 days)
+- Error: 2.6h (2% off)
+- Files changed: 7
 
-> Testing https://github.com/microsoft/vscode/issues/244525
-When user types "mcp" in `settings.json`, the next default block is automatically added to the config:
-```json
-"mcp": {
-        "inputs": [],
-        "servers": {
-            "mcp-server-time": {
-                "command": "python",
-                "args": [
-                    "-m",
-                    "mcp_server_time",...
+> ### Which jobs are failing?
+ci-kubernetes-e2e-kind-beta-enabled 
+### Which tests are failing?
+breforesuite ... cluster is unhealthy
+### Since when has it been failing?
+march 12th
+diff is https://github.com/kubernetes/kubernetes/compare/f7f694e5e...4e2bbc78b
+### Testgrid link
+https://testgrid.k8s.io/sig-release-master-informing#kind-master-beta-enabled
+### Reason for failure (if possible)
+times out...
+
+### Worst 3 predictions (least accurate)
 
 **kubernetes/kubernetes #135621** — DATA RACE garbage collector: blockingDependents
 
-- Actual: **8.0d** (192.0h, bucket: 1-4 weeks)
-- Predicted: **2.3w** (380.7h, bucket: 1-4 weeks)
-- Error: 7.9d (98% off)
+- Actual: **5.9d** (142.0h, bucket: 3-7 days)
+- Predicted: **4.4w** (738.2h, bucket: > 4 weeks)
+- Error: 3.5w (420% off)
 - Files changed: 7
 
 > ### What happened?
@@ -423,89 +335,207 @@ kube-controller-manager compiled with -race and tested with various E2E tests in
   
       Read at 0x00c004c37cf8 by goroutine 2258:...
 
+**microsoft/vscode #245707** — Error starting github: CodeExpectedError: Variable 'github_token'
+
+- Actual: **3.2d** (77.5h, bucket: 3-7 days)
+- Predicted: **13.3d** (320.1h, bucket: 1-4 weeks)
+- Error: 10.1d (313% off)
+- Files changed: 1
+
+> Error starting github: CodeExpectedError: Variable 'github_token' must be defined in an 'inputs' section of the debug or task configuration.
+cc @digitarald 
+Here is my config:
+```
+{
+    "@azure.argTenant": "",
+    "mcp": {
+        "servers": {
+            "github": {
+                "command": "docker",
+                "args": [
+                    "run",
+                    "-i",...
+
+**microsoft/vscode #302993** — Sessions: The session filter displays two `Local` session types
+
+- Actual: **3.1d** (74.0h, bucket: 3-7 days)
+- Predicted: **11.8d** (282.4h, bucket: 1-4 weeks)
+- Error: 8.7d (282% off)
+- Files changed: 1
+
+> If you click the filter icon in the sessions list, you'll see two `Local` options. The top one appears to be the `Local` sessions in VS Code, and the second one appears to be "Copilot CLI". That said, we should probably hide the former and rename the later? That way we have three options: Copilot CLI, Claude, and Cloud? That would match the terminology and VS Code and be more direct with what thes...
+
 ---
 
-## Actual bucket: **> 4 weeks** (167 samples)
+## Actual bucket: **1-4 weeks** (239 samples)
 
-*Median absolute error: 6.0w, median relative error: 86%*
+*Median absolute error: 10.0d, median relative error: 60%*
 
 ### Best 3 predictions (most accurate)
 
+**microsoft/vscode #245646** — Chat - inline chat view zone bottom gap
+
+- Actual: **9.1d** (217.7h, bucket: 1-4 weeks)
+- Predicted: **9.0d** (216.7h, bucket: 1-4 weeks)
+- Error: 58 min (0% off)
+- Files changed: 1
+
+> <img width="1017" alt="Image" src="https://github.com/user-attachments/assets/7ec42329-10e3-4404-ab8d-fe6152bf202e" />
+
+**kubernetes/kubernetes #135616** — kubectl apply with --dry-run=client - docs confusing/inaccurate
+
+- Actual: **8.6d** (205.4h, bucket: 1-4 weeks)
+- Predicted: **8.7d** (208.7h, bucket: 1-4 weeks)
+- Error: 3.3h (2% off)
+- Files changed: 3
+
+> Hi,
+> --dry-run='none':
+>         Must be "none", "server", or "client". **If client strategy, only print the object that would be sent, without sending it**. If server strategy, submit server-side request without persisting the resource.
+The output (without -o yaml) does not "print the object that would be sent" - it just gives a one-liner e.g. the manifest has been configured or unchanged
+The ou...
+
+**microsoft/vscode #302003** — Image Carousel: Allow zoom
+
+- Actual: **2.6w** (443.8h, bucket: 1-4 weeks)
+- Predicted: **2.6w** (432.7h, bucket: 1-4 weeks)
+- Error: 11.1h (3% off)
+- Files changed: 3
+
+> Testing #301610
+Allow zooming in/out in the image carousel just like in the normal image viewer
+
+### Worst 3 predictions (least accurate)
+
+**microsoft/vscode #282527** — Agent sessions: make sidebar toggle visible even in chats
+
+- Actual: **7.4d** (178.6h, bucket: 1-4 weeks)
+- Predicted: **2.7w** (453.6h, bucket: 1-4 weeks)
+- Error: 11.5d (154% off)
+- Files changed: 5
+
+> When you are in a chat, we show a title:
+<img width="571" height="440" alt="Image" src="https://github.com/user-attachments/assets/f415fbd4-f9f6-4264-a197-cce8bea5205f" />
+In here the top right should show the sidebar toggle.
+//cc @rebornix
+
+**kubernetes/kubernetes #135929** — globalmount path may be residual while pod creation-deletion
+
+- Actual: **8.0d** (192.8h, bucket: 1-4 weeks)
+- Predicted: **2.8w** (464.9h, bucket: 1-4 weeks)
+- Error: 11.3d (141% off)
+- Files changed: 3
+
+> ### What happened?
+1. created a pod A
+2. pod A starting `mountDevice` , but at this time, the csi-plugin pod was upgrading, kubelet received `rpc error: code = Unavailable error reading from server: EOF`, marked the volume device  `uncertain`, actually the globalmount was mounted.
+https://github.com/kubernetes/kubernetes/blob/15673d04e30c711a7bb0f0efe6abf4baead1463b/pkg/volume/util/operationexecut...
+
+**kubernetes/kubernetes #130554** — Duplicate keys in MatchLabelKeys of PodSpec should be explicitly validated
+
+- Actual: **7.4d** (176.9h, bucket: 1-4 weeks)
+- Predicted: **2.4w** (406.8h, bucket: 1-4 weeks)
+- Error: 9.6d (130% off)
+- Files changed: 8
+
+> #### Summary
+If `MatchLabelKeys` of `PodSpec` contains duplicate keys, the validation should fail with an explicit error.
+#### Details
+If `MatchLabelKeys` of `PodSpec` contains duplicate keys, validation will fail as follows.
+`sample-affinity.yaml`
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sample-affinity
+  labels:
+    app: sample-affinity
+spec:
+  containers:
+  - image: nginx
+    name: ng...
+
+---
+
+## Actual bucket: **> 4 weeks** (176 samples)
+
+*Median absolute error: 5.2w, median relative error: 84%*
+
+### Best 3 predictions (most accurate)
+
+**microsoft/vscode #272616** — `Ctrl+R` shows folders, workspaces, and files mixed up together
+
+- Actual: **4.4w** (747.0h, bucket: > 4 weeks)
+- Predicted: **3.9w** (652.3h, bucket: 1-4 weeks)
+- Error: 3.9d (13% off)
+- Files changed: 1
+
+> <!-- ⚠️⚠️ Do Not Delete This! bug_report_template ⚠️⚠️ -->
+<!-- Please read our Rules of Conduct: https://opensource.microsoft.com/codeofconduct/ -->
+<!-- 🕮 Read our guide about submitting issues: https://github.com/microsoft/vscode/wiki/Submitting-Bugs-and-Suggestions -->
+<!-- 🔎 Search existing issues to avoid creating duplicates. -->
+<!-- 🧪 Test using the latest Insiders build to see if your iss...
+
 **microsoft/vscode #244752** — `chat.mcp.enabled` doesn't affect API MCP server
 
-- Actual: **4.7w** (788.4h, bucket: > 4 weeks)
-- Predicted: **4.5w** (750.8h, bucket: > 4 weeks)
-- Error: 1.6d (5% off)
+- Actual: **7.7w** (1292.4h, bucket: > 4 weeks)
+- Predicted: **5.2w** (872.3h, bucket: > 4 weeks)
+- Error: 2.5w (33% off)
 - Files changed: 1
 
 > * have an extension that contributes an MCP server config
 * disable `chat.mcp.enabled`
 * the MCP server is still there
 
-**microsoft/vscode #214424** — Just restart EH automatically on extension update?
+**kubernetes/kubernetes #9675** — What storage driver (& kernel & OS) should AWS use?
 
-- Actual: **4.8w** (799.4h, bucket: > 4 weeks)
-- Predicted: **3.0w** (512.0h, bucket: 1-4 weeks)
-- Error: 12.0d (36% off)
-- Files changed: 5
+- Actual: **4.8w** (807.0h, bucket: > 4 weeks)
+- Predicted: **3.0w** (503.0h, bucket: 1-4 weeks)
+- Error: 12.7d (38% off)
+- Files changed: 10
 
-> I love the new feature that extension updates do not require the whole window reload. 
-But right now it still requires an action from me to click on "Restart Extensions".
-Can you remind me why don't we just restart the EH automatically on extension update? Are we afraid that we might break some other extension?
-Can we do some detection to see if it is "safe" to restart automatically? Or can we do...
-
-**microsoft/vscode #277174** — Terminal tabs view shows when there's only a single terminal
-
-- Actual: **4.9w** (815.3h, bucket: > 4 weeks)
-- Predicted: **2.8w** (468.9h, bucket: 1-4 weeks)
-- Error: 2.1w (42% off)
-- Files changed: 1
-
-> <img width="905" height="283" alt="Image" src="https://github.com/user-attachments/assets/584b47ef-e0bc-474f-a594-2851d50ce4e5" />
-Before, it only showed when there was more than one 
-cc @Tyriar
+> I have struggled to find a filesystem/kernel for AWS that really works well.
+- GCE uses wheezy with a custom kernel and aufs, but aufs seems like a dead-end: it isn't in the kernel and looks like it never will be AFAICT.  Getting GCE's kernel onto AWS would likely be work, both one-off and ongoing (?).
+- overlayfs seems like the future of aufs, but is only in newer kernels
+- if we're going to use...
 
 ### Worst 3 predictions (least accurate)
 
-**microsoft/vscode #280050** — List: focus outline flicker when clicking into element without prior selection
+**facebook/react #606** — `testDoc.addEventListener("scroll", callback, true)` crashes iOS Safari
 
-- Actual: **9.6w** (1618.4h, bucket: > 4 weeks)
-- Predicted: **20.7h** (20.7h, bucket: 1 day)
-- Error: 9.5w (99% off)
-- Files changed: 1
+- Actual: **10.5w** (1756.4h, bucket: > 4 weeks)
+- Predicted: **1.5d** (36.1h, bucket: 1-3 days)
+- Error: 10.2w (98% off)
+- Files changed: 2
 
-> I always found it annoying that a click into any list is first briefly flashing the outline and then removes it:
-![Image](https://github.com/user-attachments/assets/89834a18-2b42-4237-8a44-47fc468f8cc3)
-The rule that triggers this is:
-https://github.com/microsoft/vscode/blob/4fe2ba4f68694888da7625e030c0661c4caad8a1/src/vs/workbench/browser/media/style.css#L267
-Ideally if a click results in an elem...
+> ``` js
+document.implementation.createHTMLDocument('test doc').addEventListener("scroll", function(){}, true)
+```
 
-**microsoft/vscode #241809** — Make paused indication stronger and clickable
+**microsoft/vscode #298659** — Hiding other items from on-selection widget leaves a vertical bar
 
-- Actual: **7.4w** (1237.5h, bucket: > 4 weeks)
-- Predicted: **21.7h** (21.7h, bucket: 1 day)
-- Error: 7.2w (98% off)
-- Files changed: 3
+- Actual: **12.0w** (2013.7h, bucket: > 4 weeks)
+- Predicted: **2.6d** (63.5h, bucket: 1-3 days)
+- Error: 11.6w (97% off)
+- Files changed: 7
 
-> Testing #241788
-* make an agent request
-* press pause
-* the chat output shows a resumed indication but that's very easy to miss
-I'd suggest to render this as button so that this stands out more and that I can actually press it to resume the request
-<img width="476" alt="Screenshot 2025-02-25 at 08 45 50" src="https://github.com/user-attachments/assets/c1a8d1de-dabb-4521-96ed-71acd4a2a9f6" />
+> repro: 
+1. select code in editor to get the new widget
+<img width="486" height="186" alt="Image" src="https://github.com/user-attachments/assets/285bf061-764e-4b8d-9566-2b202c9540ec" />
+2. hide two items on the left -- :bug: vertical bar left over
+<img width="432" height="184" alt="Image" src="https://github.com/user-attachments/assets/b6015a7f-0d28-42de-8ea0-8ac7eeaa1458" />
+Version: 1.110.0-insi...
 
-**facebook/react #30627** — [Compiler]: Using `for` loop for array of strings
+**microsoft/vscode #225476** — Settings sync ruined my UI state
 
-- Actual: **10.8w** (1816.6h, bucket: > 4 weeks)
-- Predicted: **1.4d** (34.8h, bucket: 1-3 days)
-- Error: 10.6w (98% off)
-- Files changed: 1
+- Actual: **8.7w** (1467.3h, bucket: > 4 weeks)
+- Predicted: **2.1d** (51.6h, bucket: 1-3 days)
+- Error: 8.4w (96% off)
+- Files changed: 2
 
-> ### What kind of issue is this?
-- [ ] React Compiler core (the JS output is incorrect, or your app works incorrectly after optimization)
-- [X] babel-plugin-react-compiler (build issue installing or using the Babel plugin)
-- [ ] eslint-plugin-react-compiler (build issue installing or using the eslint plugin)
-- [ ] react-compiler-healthcheck (build issue installing or using the healthcheck script)
-#...
+> * have insiders with settings sync enabled
+* add exploration build to the sync
+* select replace local when prompted so that exploration because just like insiders
+* 🐛 over time insiders UI state gets ruined, e.g the side bar is populated with views I have carefully hidden and rearranged
 
 ---

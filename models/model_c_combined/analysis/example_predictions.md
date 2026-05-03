@@ -1,6 +1,6 @@
 # Example Predictions — Model C (model_c_combined)
 
-Test set: 896 samples
+Test set: 865 samples
 
 For each actual-duration bucket, this report shows:
 - **3 best predictions** (smallest relative error)
@@ -8,67 +8,41 @@ For each actual-duration bucket, this report shows:
 
 ---
 
-## Actual bucket: **< 1 day** (86 samples)
+## Actual bucket: **< 1 day** (72 samples)
 
-*Median absolute error: 3.2d, median relative error: 2417%*
+*Median absolute error: 2.8d, median relative error: 2149%*
 
 ### Best 3 predictions (most accurate)
 
-**kubernetes/kubernetes #136091** — Standard numeric format validation (int32, int64, float, double) is not enforced in CRDs
+**microsoft/vscode #301997** — Chat image carousel doesn't always show title
 
-- Actual: **5.7h** (5.7h, bucket: < 1 day)
+- Actual: **3.0h** (3.0h, bucket: < 1 day)
 - Predicted: **9.2h** (9.2h, bucket: 1 day)
-- Error: 3.5h (61% off)
-- Files changed: 66
+- Error: 6.1h (203% off)
+- Files changed: 2
 
-> ### What happened?
-CRDs that use standard numeric formats for both integer and number types do not actually enforce these constraints during validation. 
-This is a follow up issue of https://github.com/kubernetes/kubernetes/issues/133880
-### What did you expect to happen?
-Reject invalid integer/number following the defined formats.
-### How can we reproduce it (as minimally and precisely as possibl...
+> Testing #301610
+Opened the image carousel from a chat, but it doesn't always have a title in the top left. I couldn't figure out how to reproduce this though.
+<img width="1392" height="1294" alt="Image" src="https://github.com/user-attachments/assets/98309d72-cdc4-4aae-a1ea-22a9373ce9be" />
+<img width="1393" height="1322" alt="Image" src="https://github.com/user-attachments/assets/06d12172-e671-4e...
 
-**facebook/react #7430** — `HTMLDOMPropertyConfig` contains non-standard `icon` property
+**microsoft/vscode #250415** — mcpr quick access as wrong title
 
-- Actual: **7.9h** (7.9h, bucket: < 1 day)
-- Predicted: **1.6d** (38.9h, bucket: 1-3 days)
-- Error: 1.3d (395% off)
+- Actual: **7.2h** (7.2h, bucket: < 1 day)
+- Predicted: **1.3d** (31.1h, bucket: 1-3 days)
+- Error: 23.9h (331% off)
 - Files changed: 1
 
-> **Do you want to request a _feature_ or report a _bug_?**
-Report a bug.
-**What is the current behavior?**
-The `HTMLDOMPropertyConfig` object [includes an `icon` property](https://github.com/facebook/react/blob/cccef3c68310df3bd611df2a7b98a530645c67c0/src/renderers/dom/shared/HTMLDOMPropertyConfig.js#L85) in a section title `Standard Properties`, but `icon` isn’t an attribute supported by any stand...
-
-**microsoft/vscode #302132** — Sessions: telemetry should distinguish between the apps
-
-- Actual: **4.8h** (4.8h, bucket: < 1 day)
-- Predicted: **1.0d** (24.5h, bucket: 1-3 days)
-- Error: 19.7h (408% off)
-- Files changed: 6
-
-> Maybe a property on the base telemetry props would be good.
-
-### Worst 3 predictions (least accurate)
-
-**microsoft/vscode #283174** — "Search with AI" option shows even if you have "Disable AI Features" enabled
-
-- Actual: **1.2h** (1.2h, bucket: < 1 day)
-- Predicted: **8.1d** (193.7h, bucket: 1-4 weeks)
-- Error: 8.0d (15730% off)
-- Files changed: 1
-
-> <!-- ⚠️⚠️ Do Not Delete This! bug_report_template ⚠️⚠️ -->
-<!-- Please read our Rules of Conduct: https://opensource.microsoft.com/codeofconduct/ -->
-<!-- 🕮 Read our guide about submitting issues: https://github.com/microsoft/vscode/wiki/Submitting-Bugs-and-Suggestions -->
-<!-- 🔎 Search existing issues to avoid creating duplicates. -->
-<!-- 🧪 Test using the latest Insiders build to see if your iss...
+> Testing #250353
+* open F1 and type `?`
+* the `mcpr` entry has a title saying "Add Server"
+<img width="762" alt="Image" src="https://github.com/user-attachments/assets/70e263f7-02d8-4936-b4bb-190dd30c04f7" />
 
 **microsoft/vscode #254880** — Undoing with a `Try again` action in the history doesn't make it dissapear
 
-- Actual: **1.5h** (1.5h, bucket: < 1 day)
-- Predicted: **8.7d** (208.3h, bucket: 1-4 weeks)
-- Error: 8.6d (14172% off)
+- Actual: **7.7h** (7.7h, bucket: < 1 day)
+- Predicted: **1.4d** (33.9h, bucket: 1-3 days)
+- Error: 1.1d (341% off)
 - Files changed: 1
 
 > At some point the agent failed to edit further
@@ -76,11 +50,397 @@ The `HTMLDOMPropertyConfig` object [includes an `icon` property](https://github.
 If I clicked Undo a few times, that error message staying in the chat:
 <img width="553" height="498" alt="Image" src="https://github.com/user-attachments/assets/cb8fc15c-982c-44bb-935c-f102d8893c85" />
 
+### Worst 3 predictions (least accurate)
+
+**kubernetes/kubernetes #10803** — Unclean container garbage collection
+
+- Actual: **1.9h** (1.9h, bucket: < 1 day)
+- Predicted: **7.8d** (186.1h, bucket: 1-4 weeks)
+- Error: 7.7d (9479% off)
+- Files changed: 1
+
+> I'm conducting PoC about distributed build using Kubernetes.
+Jenkins master distribute jenkins slave pods through Kubernetes API Server.
+When build is done, jenkins slave pod is also deleted by kubernetes API Server.
+But, kubernetes didn't delete container. (Pod is deleted well)
+After searching, I found kubelet’s containerGC option.
+So, I adjusted below options to kubelet.
+--minimum-container-ttl-...
+
+**facebook/react #6797** — Move instrumentation from isomorphic to renderers/shared
+
+- Actual: **2.8h** (2.8h, bucket: < 1 day)
+- Predicted: **9.7d** (232.6h, bucket: 1-4 weeks)
+- Error: 9.6d (8155% off)
+- Files changed: 13
+
+> Per @sebmarkbage, we want `isomorphic` folder to only contain the code necessary to author React components. It should not have dependencies on `ReactInstrumentation`, `ReactDebugTool`, and `devtools/*` friends, which themselves should be moved to `renderers/shared/`.
+The only caller we to `ReactInstrumentation` we have right now in that folder is [`onSetState()`](https://github.com/facebook/react...
+
+**microsoft/vscode #246095** — Leaked disposable in `KeybindingsEditor.createHeader`
+
+- Actual: **1.3h** (1.3h, bucket: < 1 day)
+- Predicted: **4.3d** (103.3h, bucket: 3-7 days)
+- Error: 4.2d (7816% off)
+- Files changed: 1
+
+> ```
+[71755:0409/135558.118655:INFO:CONSOLE(23)] "[LEAKED DISPOSABLE] Error: CREATED via:
+    at GCBasedDisposableTracker.trackDisposable (vscode-file://vscode-app/Users/bpasero/Development/Microsoft/vscode/out/vs/base/common/lifecycle.js:27:23)
+    at trackDisposable (vscode-file://vscode-app/Users/bpasero/Development/Microsoft/vscode/out/vs/base/common/lifecycle.js:198:24)
+    at new Disposable (...
+
+---
+
+## Actual bucket: **1 day** (91 samples)
+
+*Median absolute error: 3.4d, median relative error: 559%*
+
+### Best 3 predictions (most accurate)
+
+**microsoft/vscode #247672** — Chat: Add consistent icon order across modes
+
+- Actual: **18.2h** (18.2h, bucket: 1 day)
+- Predicted: **20.0h** (20.0h, bucket: 1 day)
+- Error: 1.8h (10% off)
+- Files changed: 1
+
+> <!-- ⚠️⚠️ Do Not Delete This! feature_request_template ⚠️⚠️ -->
+<!-- Please read our Rules of Conduct: https://opensource.microsoft.com/codeofconduct/ -->
+<!-- Please search existing issues to avoid creating duplicates. -->
+While testing https://github.com/microsoft/vscode/issues/247399, I noticed that there's an inconsistent order of icons when switching between modes.
+Namely, the voice chat icon...
+
+**microsoft/vscode #250424** — Commands in warning hover are heavily truncated
+
+- Actual: **23.4h** (23.4h, bucket: 1 day)
+- Predicted: **1.3d** (30.1h, bucket: 1-3 days)
+- Error: 6.7h (29% off)
+- Files changed: 1
+
+> Testing #249660
+<img width="537" alt="Image" src="https://github.com/user-attachments/assets/606ee26f-31bf-4980-9e5f-0ce593ba0ef5" />
+
+**microsoft/vscode #260160** — Terminal suggest: git cherry-pick flags aren't supported
+
+- Actual: **12.8h** (12.8h, bucket: 1 day)
+- Predicted: **1.0d** (24.0h, bucket: 1-3 days)
+- Error: 11.3h (88% off)
+- Files changed: 5
+
+> <img width="798" height="84" alt="Image" src="https://github.com/user-attachments/assets/8a67a59b-3600-4e3a-a652-323c6e22e38b" />
+
+### Worst 3 predictions (least accurate)
+
+**microsoft/vscode #259872** — Investigate issues with `subst` workaround
+
+- Actual: **13.4h** (13.4h, bucket: 1 day)
+- Predicted: **3.6w** (607.1h, bucket: 1-4 weeks)
+- Error: 3.5w (4423% off)
+- Files changed: 2
+
+> If you start VS Code from subst drive, then VS Code will show wrong content for root of that drive:
+<img width="1366" height="720" alt="image" src="https://github.com/user-attachments/assets/6715a25d-dfb5-47c2-9bbb-d87df5bd55c5" />
+<img width="1366" height="720" alt="image" src="https://github.com/user-attachments/assets/226a0b9b-a897-493d-9059-614c43a3c253" />
+As you can see, instead of showing c...
+
+**microsoft/vscode #264515** — Double click in empty Chat Sessions list should add new session
+
+- Actual: **10.2h** (10.2h, bucket: 1 day)
+- Predicted: **13.7d** (328.6h, bucket: 1-4 weeks)
+- Error: 13.3d (3110% off)
+- Files changed: 2
+
+> Double click in empty Explorer area creates a new empty file (same effect as +)
+Same pattern should be followed for all views in the Chat Sessions view container. E.g. clicking on an empty space in Claude Code should just create a new claude code session.
+fyi @jo-oikawa @roblourens
+
+**kubernetes/kubernetes #130719** — Replace all deprecated sets.String with sets.Set from directories managed by in sig/node
+
+- Actual: **8.5h** (8.5h, bucket: 1 day)
+- Predicted: **11.0d** (264.5h, bucket: 1-4 weeks)
+- Error: 10.7d (2996% off)
+- Files changed: 2
+
+> In this PR https://github.com/kubernetes/kubernetes/pull/112377, sets.Set is newly implemented, and sets.String got marked as deprecated.
+In the files managed by sig/node, there are some `sets.String`. This issue aimas to replace all sets.String with sets.Set in the sig/node area.
+ref: https://github.com/kubernetes/kubernetes/issues/113709
+/kind cleanup
+/sig node
+- [x] pkg/controller/nodelifecycle...
+
+---
+
+## Actual bucket: **1-3 days** (150 samples)
+
+*Median absolute error: 2.8d, median relative error: 168%*
+
+### Best 3 predictions (most accurate)
+
+**facebook/react #5054** — Incorrect react-dom package on bower?
+
+- Actual: **1.4d** (34.7h, bucket: 1-3 days)
+- Predicted: **1.5d** (34.8h, bucket: 1-3 days)
+- Error: 5 min (0% off)
+- Files changed: 3
+
+> I tried doing the following to pick up react-dom: `bower install react-dom#0.14.0-rc1 --save`
+However, it said that the only version available was `0.1.0`
+Poking around on Github yielded a repo called [react-dom](https://github.com/EtienneLem/react-dom) that appears to be linked to Bower. I'm guessing this isn't the right library; what's the dependency installation story going to look like with Bo...
+
+**kubernetes/kubernetes #137074** — Update HPA e2e DynamicResourceConsumer to use current APIs
+
+- Actual: **2.7d** (64.4h, bucket: 1-3 days)
+- Predicted: **2.7d** (65.3h, bucket: 1-3 days)
+- Error: 50 min (1% off)
+- Files changed: 3
+
+> In the HPA e2e tests, the NewDynamicResourceConsumer utility function is responsible for creating several Kubernetes objects. However, these objects are currently created using deprecated/legacy API versions:
+https://github.com/kubernetes/kubernetes/blob/2fb84cfed3e0da83eec85dcc97d14db9b06915c9/test/e2e/framework/autoscaling/autoscaling_utils.go#L90-L98
+We should update this implementation to use...
+
+**microsoft/vscode #245718** — array string replacements as source no longer works in launch.json
+
+- Actual: **2.9d** (69.6h, bucket: 1-3 days)
+- Predicted: **3.0d** (71.8h, bucket: 1-3 days)
+- Error: 2.2h (3% off)
+- Files changed: 2
+
+> Type: <b>Bug</b>
+In settings json, declare an array setting
+```json
+{
+    "buildPaths": [
+        "C:\\pathone",
+        "C:\\pathtwo",
+        "C:\\paththree"
+    ]
+}
+```
+Then in launch.json, declare 
+```json
+        "options": {
+                "env": {
+                    "BUILD_EXE": "${config:buildPaths}"
+                }
+            }
+```
+Instead of an array of paths being set to BUILD_EXE,...
+
+### Worst 3 predictions (least accurate)
+
+**microsoft/vscode #297689** — 'Open Chat Customizations' button is too much
+
+- Actual: **1.4d** (32.5h, bucket: 1-3 days)
+- Predicted: **3.2w** (542.8h, bucket: 1-4 weeks)
+- Error: 3.0w (1573% off)
+- Files changed: 13
+
+> Whenever instructions/skill/agent file open in an editor, the button 'Open Chat Customizations` shows up.
+<img width="931" height="539" alt="Image" src="https://github.com/user-attachments/assets/e7f5dcd5-595c-43b8-bc9d-b9a4656925fb" />
+I think its too much and should be removed
+- It's not an action that I would typically invoke when editing in a prompt file
+- It looks lost
+
+**kubernetes/kubernetes #136347** — Post merge PR is failing: post-kubernetes-push-e2e-node-perf-tf-wide-deep-test-images
+
+- Actual: **1.4d** (34.2h, bucket: 1-3 days)
+- Predicted: **2.6w** (429.4h, bucket: 1-4 weeks)
+- Error: 2.4w (1155% off)
+- Files changed: 2
+
+> Hoisting comment from @mkumatag in https://github.com/kubernetes/kubernetes/pull/134822#issuecomment-3449397895
+the CI job is *STILL* failing https://storage.googleapis.com/kubernetes-ci-logs/logs/post-kubernetes-push-e2e-node-perf-tf-wide-deep-test-images/2011957382287986688/build-log.txt (cc @humblec - context - https://github.com/kubernetes/kubernetes/pull/134822)
+Post merge PR is failing:
+```...
+
+**kubernetes/kubernetes #134167** — MAP duplicate env parse error
+
+- Actual: **1.1d** (26.6h, bucket: 1-3 days)
+- Predicted: **13.6d** (325.7h, bucket: 1-4 weeks)
+- Error: 12.5d (1124% off)
+- Files changed: 2
+
+> ### What happened?
+The following pod gets rejected by MAP in kubernetes 1.33
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  name: hello-world
+spec:
+  containers:
+  - name: hello-world-container
+    image: nginx:latest
+    ports:
+    - containerPort: 80
+    env:
+    - name: test
+      value: a
+    - name: test
+      value: b
+```
+The pods "hello-world" is invalid: : policy 'seccomp-profile-default' with b...
+
+---
+
+## Actual bucket: **3-7 days** (137 samples)
+
+*Median absolute error: 2.7d, median relative error: 52%*
+
+### Best 3 predictions (most accurate)
+
+**microsoft/vscode #286098** — Agent sessions - back button in the title feedback
+
+- Actual: **6.2d** (149.9h, bucket: 3-7 days)
+- Predicted: **6.3d** (151.3h, bucket: 3-7 days)
+- Error: 1.4h (1% off)
+- Files changed: 3
+
+> Testing #285958
+Back button makes sense when the session is opened in the panel:
+<img width="428" height="179" alt="Image" src="https://github.com/user-attachments/assets/d20ab27b-d7a1-4f66-bc2d-8e8b113585f7" />
+When a session is opened to the side, it just clears the side area so it does not make much sense there:
+<img width="684" height="171" alt="Image" src="https://github.com/user-attachments/...
+
+**kubernetes/kubernetes #136628** — Let DRA drivers specify the order in which devices are considered during scheduling
+
+- Actual: **4.6d** (109.6h, bucket: 3-7 days)
+- Predicted: **4.6d** (110.7h, bucket: 3-7 days)
+- Error: 1.1h (1% off)
+- Files changed: 10
+
+> ### What would you like to be added?
+Currently the order in which the DRA allocator considers devices during scheduling is non-deterministic. Since the DRA allocator uses a first-fit algorithm, the order in which devices are considered can impact both the time required to schedule pods and which devices are selected.
+We want to let DRA drivers specify the order in which the allocator will consider...
+
+**microsoft/vscode #254893** — Terminal Persistence detach/attach should support basic reconnection
+
+- Actual: **4.2d** (100.7h, bucket: 3-7 days)
+- Predicted: **4.3d** (102.1h, bucket: 3-7 days)
+- Error: 1.4h (1% off)
+- Files changed: 1
+
+> https://dev.azure.com/monacotools/Monaco/_build/results?buildId=348219&view=logs&j=45e2b0b5-0069-506f-d663-629b6db3a5d5&t=7cde2c7d-5236-5b41-5514-673b49f2139d&l=178
+```
+1) VSCode Smoke Tests (Electron)
+       Terminal
+         Terminal Persistence
+           detach/attach
+             should support basic reconnection:
+     Error: Timeout: get elements '.tabs-list .monaco-list-row' after 20 second...
+
+### Worst 3 predictions (least accurate)
+
+**kubernetes/kubernetes #135621** — DATA RACE garbage collector: blockingDependents
+
+- Actual: **5.9d** (142.0h, bucket: 3-7 days)
+- Predicted: **5.4w** (910.3h, bucket: > 4 weeks)
+- Error: 4.6w (541% off)
+- Files changed: 7
+
+> ### What happened?
+kube-controller-manager compiled with -race and tested with various E2E tests in a kind cluster [led to](https://prow.k8s.io/view/gs/kubernetes-ci-logs/pr-logs/pull/133844/pull-kubernetes-e2e-kind-alpha-beta-features-race/1996896534980988928):
+
+#### kube-system/kube-controller-manager-kind-control-plane/kube-controller-manager
+  
+      Read at 0x00c004c37cf8 by goroutine 2258:...
+
+**microsoft/vscode #302993** — Sessions: The session filter displays two `Local` session types
+
+- Actual: **3.1d** (74.0h, bucket: 3-7 days)
+- Predicted: **2.1w** (353.8h, bucket: 1-4 weeks)
+- Error: 11.7d (378% off)
+- Files changed: 1
+
+> If you click the filter icon in the sessions list, you'll see two `Local` options. The top one appears to be the `Local` sessions in VS Code, and the second one appears to be "Copilot CLI". That said, we should probably hide the former and rename the later? That way we have three options: Copilot CLI, Claude, and Cloud? That would match the terminology and VS Code and be more direct with what thes...
+
+**microsoft/vscode #244570** — `observableInternal`: Cannot read properties of null (reading 'push')
+
+- Actual: **3.9d** (94.1h, bucket: 3-7 days)
+- Predicted: **2.3w** (379.8h, bucket: 1-4 weeks)
+- Error: 11.9d (304% off)
+- Files changed: 1
+
+> Cannot read properties of null (reading 'push'): TypeError: Cannot read properties of null (reading 'push')
+at [vs/base/common/observableInternal/base.ts:407:27](https://github.com/microsoft/vscode/blob/b47e1fee9e4034b5a569d54f7765e4133bd3f7ed/src/vs/base/common/observableInternal/base.ts#L407)
+at [vs/base/common/observableInternal/base.ts:489:7](https://github.com/microsoft/vscode/blob/b47e1fee9e...
+
+---
+
+## Actual bucket: **1-4 weeks** (239 samples)
+
+*Median absolute error: 9.4d, median relative error: 61%*
+
+### Best 3 predictions (most accurate)
+
+**facebook/react #2880** — Cannot load example
+
+- Actual: **7.7d** (185.9h, bucket: 1-4 weeks)
+- Predicted: **7.8d** (186.3h, bucket: 1-4 weeks)
+- Error: 26 min (0% off)
+- Files changed: 1
+
+> When I run the index.html in examples jquery-mobile in the chromium browser, I get:
+ Uncaught TypeError: Cannot read property '__reactAutoBindMap' of undefinedreact.js:5776 Constructorapp.js:182 (anonymous function)
+
+**kubernetes/kubernetes #135145** — ValidatingAdmissionPolicies that use a CRD with a property of type=object and additionalProperties=true in matchConstraints crash kube-controller-manager
+
+- Actual: **14.0d** (334.9h, bucket: 1-4 weeks)
+- Predicted: **14.0d** (335.7h, bucket: 1-4 weeks)
+- Error: 49 min (0% off)
+- Files changed: 3
+
+> ### What happened?
+A CRD that includes an object property defined as `type: object` and `additionalProperties: true` is used in a `ValidatingAdmissionPolicy` in the `matchConstraints` field.
+As soon as the `ValidatingAdmissionPolicy` is created, the `validatingadmissionpolicystatus` controller in `kube-controller-manager` does type-checking on the resource specified in the `matchConstraints` field...
+
+**kubernetes/kubernetes #24089** — kubectl validation fails when creating a non-v1 object in a v1 list
+
+- Actual: **8.9d** (213.4h, bucket: 1-4 weeks)
+- Predicted: **9.3d** (222.1h, bucket: 1-4 weeks)
+- Error: 8.8h (4% off)
+- Files changed: 7
+
+> In other words, you can't create/replace/delete/apply deployments with kubectl if they're in a list.
+Works as expected:
+``` console
+$ cat nginx-rc.yaml
+apiVersion: v1
+kind: List
+items:
+  - apiVersion: v1
+    kind: ReplicationController
+    metadata:
+      name: nginx
+    spec:
+      replicas: 1
+      template:
+        metadata:
+          labels:
+            name: nginx
+        spec:
+          cont...
+
+### Worst 3 predictions (least accurate)
+
+**kubernetes/kubernetes #135929** — globalmount path may be residual while pod creation-deletion
+
+- Actual: **8.0d** (192.8h, bucket: 1-4 weeks)
+- Predicted: **4.0w** (671.3h, bucket: 1-4 weeks)
+- Error: 2.8w (248% off)
+- Files changed: 3
+
+> ### What happened?
+1. created a pod A
+2. pod A starting `mountDevice` , but at this time, the csi-plugin pod was upgrading, kubelet received `rpc error: code = Unavailable error reading from server: EOF`, marked the volume device  `uncertain`, actually the globalmount was mounted.
+https://github.com/kubernetes/kubernetes/blob/15673d04e30c711a7bb0f0efe6abf4baead1463b/pkg/volume/util/operationexecut...
+
 **microsoft/vscode #282527** — Agent sessions: make sidebar toggle visible even in chats
 
-- Actual: **2.2h** (2.2h, bucket: < 1 day)
-- Predicted: **10.9d** (262.7h, bucket: 1-4 weeks)
-- Error: 10.9d (11770% off)
+- Actual: **7.4d** (178.6h, bucket: 1-4 weeks)
+- Predicted: **3.7w** (615.3h, bucket: 1-4 weeks)
+- Error: 2.6w (244% off)
 - Files changed: 5
 
 > When you are in a chat, we show a title:
@@ -88,407 +448,108 @@ If I clicked Undo a few times, that error message staying in the chat:
 In here the top right should show the sidebar toggle.
 //cc @rebornix
 
----
+**microsoft/vscode #278199** — Issue running subagent tool
 
-## Actual bucket: **1 day** (90 samples)
-
-*Median absolute error: 3.2d, median relative error: 524%*
-
-### Best 3 predictions (most accurate)
-
-**kubernetes/kubernetes #2681** — Kubelet stats don't work with latest version of cadvisor (0.6.2)
-
-- Actual: **23.9h** (23.9h, bucket: 1 day)
-- Predicted: **1.1d** (27.3h, bucket: 1-3 days)
-- Error: 3.4h (14% off)
-- Files changed: 10
-
-> Detailed at https://github.com/openshift/origin/issues/458.
-With cadvisor 0.6.2 request to kubelet at `/stats/<POD_ID>/<CONTAINER_ID>` doesn't work as it proxies call to cadvisor `/containers/docker/<DOCKER_ID>` The `/containers` prefix no longer works.
-Solution is to upgrade `github.com/google/cadvisor/client` & `github.com/google/cadvisor/info` dependencies & update `cadvisorInterface`with `Dock...
-
-**kubernetes/kubernetes #135001** — failing kubelet skew jobs with kubeadm (kinder)
-
-- Actual: **21.5h** (21.5h, bucket: 1 day)
-- Predicted: **1.3d** (30.1h, bucket: 1-3 days)
-- Error: 8.7h (40% off)
-- Files changed: 2
-
-> ### Which jobs are failing?
-https://testgrid.k8s.io/sig-cluster-lifecycle-kubeadm#kubeadm-kinder-kubelet-1-33-on-latest
-https://testgrid.k8s.io/sig-cluster-lifecycle-kubeadm#kubeadm-kinder-kubelet-1-32-on-latest
-
-### Which tests are failing?
-Kubernetes e2e suite.[It] [sig-node] Pods Extended (pod generation) Pod Generation issue 500 podspec updates and verify generation and observedGeneration even...
-
-**microsoft/vscode #248550** — `sourceFileMap` does not work with `${config:` settings on v1.100
-
-- Actual: **19.0h** (19.0h, bucket: 1 day)
-- Predicted: **1.2d** (28.6h, bucket: 1-3 days)
-- Error: 9.5h (50% off)
-- Files changed: 2
-
-> <!-- ⚠️⚠️ Do Not Delete This! bug_report_template ⚠️⚠️ -->
-<!-- Please read our Rules of Conduct: https://opensource.microsoft.com/codeofconduct/ -->
-<!-- 🕮 Read our guide about submitting issues: https://github.com/microsoft/vscode/wiki/Submitting-Bugs-and-Suggestions -->
-<!-- 🔎 Search existing issues to avoid creating duplicates. -->
-<!-- 🧪 Test using the latest Insiders build to see if your iss...
-
-### Worst 3 predictions (least accurate)
-
-**facebook/react #28968** — Update react GitHub page CNAME record
-
-- Actual: **8.9h** (8.9h, bucket: 1 day)
-- Predicted: **12.9d** (309.9h, bucket: 1-4 weeks)
-- Error: 12.5d (3372% off)
+- Actual: **9.8d** (235.4h, bucket: 1-4 weeks)
+- Predicted: **3.8w** (635.7h, bucket: 1-4 weeks)
+- Error: 2.4w (170% off)
 - Files changed: 1
 
-> React GitHub page (https://facebook.github.io/react) (`gh-pages` branch) currently pointing to [reactjs.org](https://reactjs.org) and then it redirects to https://react.dev/.
-So many redirects, can we update the content of `CNAME` file with `react.dev`, if it ok to do, then I am very happy to do the same and I'll contribution in real open source project.
-
-**kubernetes/kubernetes #3640** — Round robin load balancer can overwhelm first pod behind service
-
-- Actual: **10.4h** (10.4h, bucket: 1 day)
-- Predicted: **2.1w** (351.4h, bucket: 1-4 weeks)
-- Error: 2.0w (3277% off)
-- Files changed: 4
-
-> This is particularly easy to do with a new cluster.
-Create a service `S` and deploy `N` pods behind it. Start up `M` pods which create a persistent connection to service `S`.
-Because the round robin load balancer always starts at the 0th endpoint, and the endpoint list is consistent cluster-wide, you will see that you now have `M` connections to Pod 1, and 0 connections to all other pods 2 through...
-
-**kubernetes/kubernetes #134961** — ResourceClaim strategy test miss the unexpected error check
-
-- Actual: **10.9h** (10.9h, bucket: 1 day)
-- Predicted: **12.5d** (300.1h, bucket: 1-4 weeks)
-- Error: 12.1d (2664% off)
-- Files changed: 2
-
-> ### What happened?
-According to the comment https://github.com/kubernetes/kubernetes/pull/134615#discussion_r2475964555 by @mortent, the assertion in `pkg/registry/resource/resourceclaimtemplate/strategy_test.go` doesn't catch situations where Validate unexpectedly returns errors.
-Since tc.expectValidationError is an empty string in this situation, it will pass. It should check that if tc.expectVa...
+> - Copilot Chat Extension Version: 0.33.1
+- VS Code Version: 1.106.1
+- OS Version: Windows 11 / WSL Ubuntu
+- Feature (e.g. agent/edit/ask mode): agent
+- Selected model (e.g. GPT 4.1, Claude 3.7 Sonnet): Claude Sonnet 4.5
+- Logs: -
+The #runSubagent tool randomly stops working in VS Code Chat. I understand that it is an experimental feature and that it is subject to errors, but I am passing on what i...
 
 ---
 
-## Actual bucket: **1-3 days** (157 samples)
+## Actual bucket: **> 4 weeks** (176 samples)
 
-*Median absolute error: 3.0d, median relative error: 156%*
-
-### Best 3 predictions (most accurate)
-
-**kubernetes/kubernetes #137617** — DRA scheduler plugin cannot fulfill gang scheduling with shared ResourceClaims
-
-- Actual: **2.0d** (49.0h, bucket: 1-3 days)
-- Predicted: **2.0d** (49.0h, bucket: 1-3 days)
-- Error: 2 min (0% off)
-- Files changed: 12
-
-> ### What happened?
-When two Pods are created in a gang where both Pods share the same ResourceClaim, the scheduler falls into an endless loop trying to schedule the Pods and never succeeds.
-```
-Events:
-  Type     Reason            Age                          From               Message
-  ----     ------            ----                         ----               -------
-  Warning  FailedScheduling...
-
-**microsoft/vscode #285255** — Remove or move `src/vs/loader.js`
-
-- Actual: **2.2d** (52.8h, bucket: 1-3 days)
-- Predicted: **2.1d** (50.6h, bucket: 1-3 days)
-- Error: 2.2h (4% off)
-- Files changed: 5
-
-> Given https://github.com/microsoft/vscode-dev/issues/1245#issuecomment-3675865128, I am moving ahead to remove the ESM-AMD bridge support for web in https://github.com/microsoft/vscode/pull/285230. This means web no longer has a dependency on `src/vs/loader.js` and thus can be removed or moved.
-However, it looks like there are still certain uses (searching for `loader.js` in `vscode`):
-- the edito...
-
-**kubernetes/kubernetes #3852** — Automatically restart etcd
-
-- Actual: **2.2d** (52.6h, bucket: 1-3 days)
-- Predicted: **2.0d** (47.5h, bucket: 1-3 days)
-- Error: 5.1h (10% off)
-- Files changed: 2
-
-> We don't currently automatically restart etcd.  We should.
-
-### Worst 3 predictions (least accurate)
-
-**facebook/react #6879** — React.createElement(type, { key: undefined }) is handled incorrectly
-
-- Actual: **1.0d** (24.6h, bucket: 1-3 days)
-- Predicted: **13.5d** (325.1h, bucket: 1-4 weeks)
-- Error: 12.5d (1219% off)
-- Files changed: 3
-
-> I believe #5744 introduced a behavioral difference between development and production versions of React. We released it as a part of 15.0, and this difference still exists.
-The production behavior hasn’t changed. However the development behavior diverged after this change.
-``` js
-var el = React.createElement('div', { key: undefined })
-document.body.innerHTML = (typeof el.key) + ' ' + el.key
-```
-Wh...
-
-**kubernetes/kubernetes #126468** — kube-proxy: initialization check race leads to stale UDP conntrack
-
-- Actual: **1.0d** (24.9h, bucket: 1-3 days)
-- Predicted: **11.3d** (272.2h, bucket: 1-4 weeks)
-- Error: 10.3d (995% off)
-- Files changed: 1
-
-> ### What happened?
-AKS had a customer report repeated issues in their clusters where:
-1. kube-proxy would redeploy (e.g. due to AKS deploying a new kube-proxy image with CVE fixes)
-2. Envoy c-ares DNS client would send repeated DNS queries to the kube-dns service VIP from the same src IP address, creating a UDP conntrack entry to the svc VIP and keeping it alive. For example, with kube-dns svc VIP...
-
-**kubernetes/kubernetes #73264** — --cpu-cfs-quota-period should not have effect if feature gate CPUCFSQuotaPeriod is not enabled
-
-- Actual: **1.2d** (29.7h, bucket: 1-3 days)
-- Predicted: **11.8d** (282.0h, bucket: 1-4 weeks)
-- Error: 10.5d (850% off)
-- Files changed: 2
-
-> <!-- Please use this template while reporting a bug and provide as much info as possible. Not doing so may result in your bug not being addressed in a timely manner. Thanks!-->
-
-**What happened**:
-When run kubelet with "--cpu-cfs-quota-period 1000ms"  and without --feature-gates=CustomCPUCFSQuotaPeriod=true, kubelet would set cgroup cpu.cfs_period_us to 1000000, but make calculation based on a def...
-
----
-
-## Actual bucket: **3-7 days** (133 samples)
-
-*Median absolute error: 1.8d, median relative error: 41%*
+*Median absolute error: 5.2w, median relative error: 85%*
 
 ### Best 3 predictions (most accurate)
 
-**kubernetes/kubernetes #26138** — [k8s.io] Kubectl client [k8s.io] Kubectl rolling-update should support rolling-update to same image [Conformance] {Kubernetes e2e suite}
+**microsoft/vscode #244752** — `chat.mcp.enabled` doesn't affect API MCP server
 
-- Actual: **6.2d** (148.2h, bucket: 3-7 days)
-- Predicted: **6.2d** (149.0h, bucket: 3-7 days)
-- Error: 50 min (1% off)
+- Actual: **7.7w** (1292.4h, bucket: > 4 weeks)
+- Predicted: **7.8w** (1315.8h, bucket: > 4 weeks)
+- Error: 23.3h (2% off)
+- Files changed: 1
+
+> * have an extension that contributes an MCP server config
+* disable `chat.mcp.enabled`
+* the MCP server is still there
+
+**kubernetes/kubernetes #135963** — [Flake] test/integration/servicecidr: TestServiceAllocation fails with "range is full"
+
+- Actual: **5.0w** (836.5h, bucket: > 4 weeks)
+- Predicted: **4.8w** (805.2h, bucket: > 4 weeks)
+- Error: 1.3d (4% off)
 - Files changed: 2
 
-> https://console.cloud.google.com/storage/kubernetes-jenkins/logs/kubernetes-e2e-gke/7634/
-Failed: [k8s.io] Kubectl client [k8s.io] Kubectl rolling-update should support rolling-update to same image [Conformance] {Kubernetes e2e suite}
-```
-/go/src/k8s.io/kubernetes/_output/dockerized/go/src/k8s.io/kubernetes/test/e2e/kubectl.go:911
-Expected error:
-    <*errors.errorString | 0xc820684350>: {...
+> ### Which jobs are flaking?
+ci-kubernetes-integration-master
+### Which tests are flaking?
+k8s.io/kubernetes/test/integration/servicecidr TestServiceAllocation/IP_allocator_only
+### Since when has it been flaking?
+Observed on Dec 28, 2025
+### Testgrid link
+https://testgrid.k8s.io/sig-release-master-blocking#integration-master
+### Reason for failure (if possible)
+The test fails with an IP exhaustion...
 
-**kubernetes/kubernetes #1776** — Update demo e2e has unbound variable
-
-- Actual: **4.7d** (112.4h, bucket: 3-7 days)
-- Predicted: **4.7d** (113.1h, bucket: 3-7 days)
-- Error: 44 min (1% off)
-- Files changed: 5
-
-> Saw this in Jenkins:
-```
-./hack/../cluster/gce/../../hack/e2e-suite/update.sh: line 30: pod_id_list[@]: unbound variable
-```
-
-**kubernetes/kubernetes #33375** — Extend `local-up-cluster.sh` to be able to start with the secured port 
-
-- Actual: **3.3d** (78.2h, bucket: 3-7 days)
-- Predicted: **3.2d** (77.4h, bucket: 3-7 days)
-- Error: 49 min (1% off)
-- Files changed: 3
-
-> Followup to https://github.com/kubernetes/kubernetes/pull/31491
-Extend `local-up-cluster.sh` to be able to start with the secured port available using https://github.com/kubernetes/kubernetes/pull/31491 and an option to close the insecured port so that its easy to start determining which permissions the controllers need.
-The controller manager should try to make use of the secured port hidden behi...
-
-### Worst 3 predictions (least accurate)
-
-**kubernetes/kubernetes #18606** — Reconcile testing docs
-
-- Actual: **3.2d** (76.1h, bucket: 3-7 days)
-- Predicted: **10.5d** (252.9h, bucket: 1-4 weeks)
-- Error: 7.4d (233% off)
-- Files changed: 2
-
-> https://github.com/kubernetes/kubernetes/pull/14112 introduced [docs/devel/e2e-tests.md](https://github.com/kubernetes/kubernetes/blob/master/docs/devel/e2e-tests.md), but that document isn't correct, and contradicts the information in [docs/devel/development.md](https://github.com/kubernetes/kubernetes/blob/master/docs/devel/development.md).  These two docs should be reconciled.
-
-**microsoft/vscode #244403** — Notebook snapshot not restored when reloading VS Code
-
-- Actual: **3.3d** (79.1h, bucket: 3-7 days)
-- Predicted: **10.9d** (262.1h, bucket: 1-4 weeks)
-- Error: 7.6d (231% off)
-- Files changed: 1
-
-> <!-- ⚠️⚠️ Do Not Delete This! bug_report_template ⚠️⚠️ -->
-<!-- Please read our Rules of Conduct: https://opensource.microsoft.com/codeofconduct/ -->
-<!-- 🕮 Read our guide about submitting issues: https://github.com/microsoft/vscode/wiki/Submitting-Bugs-and-Suggestions -->
-<!-- 🔎 Search existing issues to avoid creating duplicates. -->
-<!-- 🧪 Test using the latest Insiders build to see if your iss...
-
-**kubernetes/kubernetes #136307** — Graduate job_controller metrics to BETA
-
-- Actual: **6.9d** (165.8h, bucket: 3-7 days)
-- Predicted: **3.1w** (519.8h, bucket: 1-4 weeks)
-- Error: 2.1w (213% off)
-- Files changed: 3
-
-> Parent issue: https://github.com/kubernetes/kubernetes/issues/136107
-- path: pkg/controller/job/metrics/metrics.go
-    - [x] job_controller_pod_failures_handled_by_failure_policy_total
-    - [x] job_controller_terminated_pods_tracking_finalizer_total
-
----
-
-## Actual bucket: **1-4 weeks** (263 samples)
-
-*Median absolute error: 8.3d, median relative error: 61%*
-
-### Best 3 predictions (most accurate)
-
-**kubernetes/kubernetes #26435** — Node e2e does not return error from copying test artifacts
-
-- Actual: **8.3d** (198.6h, bucket: 1-4 weeks)
-- Predicted: **8.3d** (199.0h, bucket: 1-4 weeks)
-- Error: 24 min (0% off)
-- Files changed: 1
-
-**kubernetes/kubernetes #11471** — HA for kube-dns
-
-- Actual: **12.3d** (295.2h, bucket: 1-4 weeks)
-- Predicted: **12.1d** (289.3h, bucket: 1-4 weeks)
-- Error: 6.0h (2% off)
-- Files changed: 1
-
-> I recently ran into an issue on my cluster because kube-dns unexpectedly went down.
-The only error I saw was "2015/07/08 23:18:23 etcdhttp: unexpected error: etcdserver: request timed out"
-I'm guessing etcd went down and recovered on its own. However, during this time, I was unable to launch any topologies at all on my cluster which leads me to thinking about some way to make the system more resil...
-
-**kubernetes/kubernetes #135039** — [Failing Test] [sig-cluster-lifecycle] kinder.test.workflow: task-09-e2e-after
-
-- Actual: **11.5d** (275.3h, bucket: 1-4 weeks)
-- Predicted: **11.2d** (268.7h, bucket: 1-4 weeks)
-- Error: 6.7h (2% off)
-- Files changed: 1
-
-> ### Which jobs are failing?
-* sig-release-master-informing
-* kubeadm-kinder-upgrade-1-34-latest
-### Which tests are failing?
-* [task-09-e2e-after](https://prow.k8s.io/view/gs/kubernetes-ci-logs/logs/ci-kubernetes-e2e-kubeadm-kinder-upgrade-1-34-latest/1984871857492332544)
-### Since when has it been failing?
-* First failure: Sat, 18 Oct 2025 07:35:03 UTC
-* Latest failure: Sun, 02 Nov 2025 06:36:18...
-
-### Worst 3 predictions (least accurate)
-
-**kubernetes/kubernetes #26526** — Update API Reference script
-
-- Actual: **7.7d** (185.2h, bucket: 1-4 weeks)
-- Predicted: **2.7w** (456.0h, bucket: 1-4 weeks)
-- Error: 11.3d (146% off)
-- Files changed: 1
-
-> Hi, 
-there is a minor bug in the [hack/update-api-reference-docs.sh](https://github.com/kubernetes/kubernetes/blob/master/hack/update-api-reference-docs.sh) script or at least some inconsistency. When I run the update script white spaces are ignores with the `-w`option [see line 98](https://github.com/kubernetes/kubernetes/blob/master/hack/update-api-reference-docs.sh#L98) but in the [verify scrip...
-
-**facebook/react #4069** — Stop building react-source gem
-
-- Actual: **2.9w** (479.7h, bucket: 1-4 weeks)
-- Predicted: **16.6h** (16.6h, bucket: 1 day)
-- Error: 2.8w (97% off)
-- Files changed: 5
-
-> I'm not sure how much value there really is in this. react-rails already stopped using it and just builds the files in itself.
-cc @rmosolgo
-
-**microsoft/vscode #275061** — Inline chat: need 2 undo to remove a change
-
-- Actual: **9.3d** (224.2h, bucket: 1-4 weeks)
-- Predicted: **2.6w** (440.6h, bucket: 1-4 weeks)
-- Error: 9.0d (97% off)
-- Files changed: 1
-
-> Testing #274768
-If you accept an inline chat change, I need 2x undo to remove it again.
-
----
-
-## Actual bucket: **> 4 weeks** (167 samples)
-
-*Median absolute error: 6.0w, median relative error: 86%*
-
-### Best 3 predictions (most accurate)
-
-**kubernetes/kubernetes #136094** — [Failing Test] cri-proxy [sig node] image volume digest error handling should expect error log for image volume with empty Image.Image
+**kubernetes/kubernetes #9675** — What storage driver (& kernel & OS) should AWS use?
 
 - Actual: **4.8w** (807.0h, bucket: > 4 weeks)
-- Predicted: **4.4w** (736.6h, bucket: > 4 weeks)
-- Error: 2.9d (9% off)
-- Files changed: 1
+- Predicted: **4.3w** (725.0h, bucket: > 4 weeks)
+- Error: 3.4d (10% off)
+- Files changed: 10
 
-> ### Which jobs are failing?
-https://prow.k8s.io/view/gs/kubernetes-ci-logs/logs/ci-kubernetes-node-e2e-cri-proxy-serial/2001550251227353088
-### Which tests are failing?
-E2eNode Suite: [It] [sig-node] [Feature:CriProxy] [Serial] Image volume digest error handling [Feature:CriProxy] [FeatureGate:ImageVolumeWithDigest] [Alpha] [Feature:OffByDefault] should expect error log for image volume with empty...
-
-**kubernetes/kubernetes #134737** — failing test[sig-node] Override hostname of Pod [FeatureGate:HostnameOverride] [Beta] a pod with only hostnameOverride field will have hostnameOverride as hostname
-
-- Actual: **4.4w** (742.6h, bucket: > 4 weeks)
-- Predicted: **2.6w** (432.7h, bucket: 1-4 weeks)
-- Error: 12.9d (42% off)
-- Files changed: 2
-
-> https://prow.k8s.io/view/gs/kubernetes-ci-logs/logs/ci-kubernetes-e2e-kind-ipv6/1980349256950616064
-https://github.com/kubernetes/kubernetes/compare/183e01c6f...e4fcafba6
-https://testgrid.k8s.io/sig-release-master-blocking#kind-ipv6-master
-/kind failing-test
-/sig node
-
-**microsoft/vscode #287819** — Better Shebang Language Detection (Deno, Bun, etc)
-
-- Actual: **6.0w** (1008.3h, bucket: > 4 weeks)
-- Predicted: **3.4w** (570.7h, bucket: 1-4 weeks)
-- Error: 2.6w (43% off)
-- Files changed: 2
-
-> Along the same lines as #182613, it would be nice if the shebang language detection worked a bit better... especially with /usr/bin/env (-S) where the language/executable after env or env -S is supported, or can determine the type of file, but not a direct match.
-ex: `#!/usr/bin/env -S deno -A` or similar should be treated as typescript.
-Runtimes really matter, and it would be nice if more were di...
+> I have struggled to find a filesystem/kernel for AWS that really works well.
+- GCE uses wheezy with a custom kernel and aufs, but aufs seems like a dead-end: it isn't in the kernel and looks like it never will be AFAICT.  Getting GCE's kernel onto AWS would likely be work, both one-off and ongoing (?).
+- overlayfs seems like the future of aufs, but is only in newer kernels
+- if we're going to use...
 
 ### Worst 3 predictions (least accurate)
 
-**microsoft/vscode #241809** — Make paused indication stronger and clickable
+**kubernetes/kubernetes #137269** — Investigate cleaning up cross-group publishing of Options types in openapi v3
 
-- Actual: **7.4w** (1237.5h, bucket: > 4 weeks)
-- Predicted: **12.9h** (12.9h, bucket: 1 day)
-- Error: 7.3w (99% off)
-- Files changed: 3
+- Actual: **5.2w** (865.4h, bucket: > 4 weeks)
+- Predicted: **14.5h** (14.5h, bucket: 1 day)
+- Error: 5.1w (98% off)
+- Files changed: 36
 
-> Testing #241788
-* make an agent request
-* press pause
-* the chat output shows a resumed indication but that's very easy to miss
-I'd suggest to render this as button so that this stands out more and that I can actually press it to resume the request
-<img width="476" alt="Screenshot 2025-02-25 at 08 45 50" src="https://github.com/user-attachments/assets/c1a8d1de-dabb-4521-96ed-71acd4a2a9f6" />
+> While reviewing https://github.com/kubernetes/kubernetes/pull/137028/files, I noticed that any addition of any group/version results in changes to the openapi v3 published for all other group versions.
+This happens because we cross-register generic metav1 types like DeleteOptions and WatchEvent into all API group/versions, and then publish all registered group/versions for those types into openapi...
 
-**kubernetes/kubernetes #136910** — Some crashed or OOMKilled containers fail to restart in v1.35
+**microsoft/vscode #298659** — Hiding other items from on-selection widget leaves a vertical bar
 
-- Actual: **12.5w** (2099.0h, bucket: > 4 weeks)
-- Predicted: **1.9d** (46.5h, bucket: 1-3 days)
-- Error: 12.2w (98% off)
-- Files changed: 3
+- Actual: **12.0w** (2013.7h, bucket: > 4 weeks)
+- Predicted: **1.4d** (34.1h, bucket: 1-3 days)
+- Error: 11.8w (98% off)
+- Files changed: 7
 
-> ### What happened?
-After upgrading Kubernetes from v1.34.2 to v1.35.0, we observed a scenario where a pod with multiple containers does not restart a crashed application container, leaving the pod in an Error state indefinitely.
-This behavior was not observed on v1.34.2. Reverting the kubelet back to v1.34.2 causes the issue to disappear.
-**Observed Behavior:**
-The main container terminates but ne...
+> repro: 
+1. select code in editor to get the new widget
+<img width="486" height="186" alt="Image" src="https://github.com/user-attachments/assets/285bf061-764e-4b8d-9566-2b202c9540ec" />
+2. hide two items on the left -- :bug: vertical bar left over
+<img width="432" height="184" alt="Image" src="https://github.com/user-attachments/assets/b6015a7f-0d28-42de-8ea0-8ac7eeaa1458" />
+Version: 1.110.0-insi...
 
-**kubernetes/kubernetes #133847** — kubelet_volume_stats_* metrics not available in 1.34
+**microsoft/vscode #281643** — Agent sessions: special rendering of PRs and worktrees
 
-- Actual: **6.3w** (1060.5h, bucket: > 4 weeks)
-- Predicted: **1.1d** (25.9h, bucket: 1-3 days)
-- Error: 6.2w (98% off)
-- Files changed: 5
+- Actual: **12.4w** (2075.1h, bucket: > 4 weeks)
+- Predicted: **1.7d** (41.5h, bucket: 1-3 days)
+- Error: 12.1w (98% off)
+- Files changed: 6
 
-> ### What happened?
-When using Kubernetes version 1.34 `kubelet_volume_stats_*` metrics such as `kubelet_volume_stats_available_bytes` are no longer present in `kubectl get --raw "/api/v1/nodes/$NODE/proxy/metrics"`.
-I know that they are in Alpha state and Alpha metrics do not come with any guarantees, but since they are still [documented](https://kubernetes.io/docs/reference/instrumentation/metric...
+> <!-- ⚠️⚠️ Do Not Delete This! feature_request_template ⚠️⚠️ -->
+<!-- Please read our Rules of Conduct: https://opensource.microsoft.com/codeofconduct/ -->
+<!-- Please search existing issues to avoid creating duplicates. -->
+<!-- Describe the feature you'd like. -->
+Ref https://github.com/microsoft/vscode-internalbacklog/issues/6388
+I thought PR links were previously clickable - is that no longer t...
 
 ---

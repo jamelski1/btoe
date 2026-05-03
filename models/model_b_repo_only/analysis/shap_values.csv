@@ -1,0 +1,14 @@
+feature,mean_abs_shap
+num_files,0.25429785
+avg_file_age_days,0.015843775
+total_churn_deleted,0.014963912
+total_churn_added,0.0101419585
+avg_churn_per_file,0.007820734
+max_file_age_days,0.0064341906
+avg_change_frequency,0.0050964565
+total_churn_commits,0.0042747455
+fan_in,0.0037834556
+max_change_frequency,0.0019030904
+min_file_age_days,0.00063389255
+fan_out,0.00032929523
+change_impact_radius,0.0
