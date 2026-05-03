@@ -596,9 +596,10 @@ def step_train(config: dict):
     max_hours = config["filtering"]["max_duration_days"] * 24
     min_hours = config["filtering"]["min_duration_hours"]
     mask = (df["duration_hours"] >= min_hours) & (df["duration_hours"] <= max_hours)
+    keep_idx = mask[mask].index.tolist()
     n_before = len(df)
-    df = df[mask].reset_index(drop=True)
-    nlp_features = nlp_features[mask].reset_index(drop=True)
+    df = df.loc[keep_idx].reset_index(drop=True)
+    nlp_features = nlp_features.iloc[keep_idx].reset_index(drop=True)
     n_after = len(df)
     if n_before != n_after:
         logger.info(f"  Duration filter: {n_before} -> {n_after} samples "
@@ -613,7 +614,7 @@ def step_train(config: dict):
     # Model B: Repo-only (skip if not yet extracted)
     try:
         repo_features = _load_features("repo_features")
-        repo_features = repo_features[mask].reset_index(drop=True)
+        repo_features = repo_features.iloc[keep_idx].reset_index(drop=True)
         result_b = trainer.train_and_evaluate(repo_features, y, "model_b_repo_only")
 
         # Model C: Combined
