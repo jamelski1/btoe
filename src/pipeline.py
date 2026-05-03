@@ -585,6 +585,77 @@ def step_train_model_a(config: dict):
     return result_a
 
 
+def step_train_model_b_no_numfiles(config: dict):
+    """Train Model B without num_files to test if PyDriller metrics carry signal.
+
+    num_files dominates Model B's SHAP importance (16x the next feature)
+    and is also a post-hoc signal (derived from pr_files_changed, not
+    available at issue-creation time). This step removes it to see if
+    the structural metrics (churn, coupling, file age) predict anything.
+    """
+    from src.modeling.trainer import ModelTrainer
+
+    df = _load_raw_data()
+    repo_features = _load_features("repo_features")
+
+    # Apply duration filter
+    max_hours = config["filtering"]["max_duration_days"] * 24
+    min_hours = config["filtering"]["min_duration_hours"]
+    mask = (df["duration_hours"] >= min_hours) & (df["duration_hours"] <= max_hours)
+    keep_idx = mask[mask].index.tolist()
+    df = df.loc[keep_idx].reset_index(drop=True)
+    repo_features = repo_features.iloc[keep_idx].reset_index(drop=True)
+    y = df["duration_hours"]
+
+    # Drop num_files
+    if "num_files" in repo_features.columns:
+        repo_features = repo_features.drop(columns=["num_files"])
+        logger.info(f"  Dropped num_files. Remaining features: {list(repo_features.columns)}")
+    else:
+        logger.warning("  num_files column not found in repo_features")
+
+    trainer = ModelTrainer(config)
+    result = trainer.train_and_evaluate(repo_features, y, "model_b_repo_no_numfiles")
+
+    # Print comparison with original Model B
+    original_path = get_model_dir() / "model_b_repo_only" / "results.json"
+    if original_path.exists():
+        with open(original_path) as f:
+            original = json.load(f).get("test_metrics", {})
+
+        new = result.test_metrics
+        print()
+        print("=" * 70)
+        print("MODEL B: WITH vs WITHOUT num_files")
+        print("=" * 70)
+        print(f"  {'Metric':<12} {'With num_files':>15} {'Without':>15} {'Delta':>12}")
+        print(f"  {'-'*55}")
+        for key, label in [("mae", "MAE"), ("mdae", "MdAE"), ("sa", "SA"),
+                            ("pred_25", "PRED(25)"), ("r2", "R2"),
+                            ("glass_delta", "Glass delta")]:
+            orig_val = original.get(key, 0)
+            new_val = new.get(key, 0)
+            delta = new_val - orig_val
+            sign = "+" if delta > 0 else ""
+            print(f"  {label:<12} {orig_val:>15.2f} {new_val:>15.2f} {sign}{delta:>11.2f}")
+        print()
+
+    # Quick feature importance from XGBoost (no SHAP needed)
+    import joblib
+    model_path = get_model_dir() / "model_b_repo_no_numfiles" / "model.joblib"
+    if model_path.exists():
+        model = joblib.load(model_path)
+        importances = model.feature_importances_
+        feature_names = result.feature_names
+        imp_pairs = sorted(zip(feature_names, importances), key=lambda x: -x[1])
+        print("  Top features (XGBoost gain) without num_files:")
+        for fname, imp in imp_pairs[:5]:
+            print(f"    {fname}: {imp:.4f}")
+        print()
+
+    return result
+
+
 def step_train(config: dict):
     """Step 4: Train Models A, B, C and compare."""
     from src.modeling.trainer import ModelTrainer
@@ -1267,7 +1338,8 @@ def main():
         "--step",
         choices=["validate", "collect", "merge_data", "clean_data", "data_quality",
                  "features", "nlp_features",
-                 "repo_features", "train_model_a", "train", "analyze",
+                 "repo_features", "train_model_a", "train_model_b_no_numfiles",
+                 "train", "analyze",
                  "error_analysis", "shap_analysis", "examples", "sensitivity",
                  "encoder_ablation", "feature_selection_ablation",
                  "dimensionality_sweep", "all"],
@@ -1309,6 +1381,7 @@ def main():
         "nlp_features": step_nlp_features,
         "repo_features": step_repo_features,
         "train_model_a": step_train_model_a,
+        "train_model_b_no_numfiles": step_train_model_b_no_numfiles,
         "train": step_train,
         "analyze": step_analyze,
         "error_analysis": step_error_analysis,
