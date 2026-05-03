@@ -98,12 +98,30 @@ def step_clean_data(config: dict):
             df = df[df["num_files_changed"] > 0]
             logger.info(f"  Dropped {zero_files} samples with 0 files changed")
 
-    # 4. Deduplicate
+    # 4. Standardize duration measurement
+    # Use issue_created_at → pr_merged_at for ALL pairs (consistent measurement).
+    # Previously, pairs with issue_assigned_at used assignment→merge while others
+    # used creation→merge, mixing two different duration definitions.
+    if "issue_created_at" in df.columns and "pr_merged_at" in df.columns:
+        has_assigned = df["issue_assigned_at"].notna().sum() if "issue_assigned_at" in df.columns else 0
+        created = pd.to_datetime(df["issue_created_at"])
+        merged = pd.to_datetime(df["pr_merged_at"])
+        df["duration_hours"] = (merged - created).dt.total_seconds() / 3600
+        logger.info(f"  Standardized duration: issue_created_at -> pr_merged_at for all {len(df)} pairs")
+        logger.info(f"    (previously {has_assigned} used assignment time, {len(df) - has_assigned} used creation time)")
+
+    # 5. Deduplicate
     n_before = len(df)
     df = df.drop_duplicates(subset=["repo", "issue_number"], keep="first")
     n_dupes = n_before - len(df)
     if n_dupes > 0:
         logger.info(f"  Dropped {n_dupes} duplicate repo+issue_number pairs")
+
+    # 6. Re-apply duration filter (some may now be negative or out of bounds)
+    dur_before = len(df)
+    df = df[df["duration_hours"] > 0]
+    if len(df) < dur_before:
+        logger.info(f"  Dropped {dur_before - len(df)} samples with non-positive standardized duration")
 
     df = df.reset_index(drop=True)
     n_final = len(df)
