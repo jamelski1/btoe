@@ -422,3 +422,147 @@ class TestDerivedFeatures:
             "Fix the button color in the settings page"
         )
         assert count == 0
+
+
+# ── Test 9: Integration — Feature Alignment After Filtering ──────── #
+
+class TestFeatureAlignment:
+    """Integration tests verifying that pipeline steps produce aligned data.
+
+    These tests require actual pipeline artifacts (parquet files) to exist.
+    They are skipped if the data hasn't been generated yet. Run the full
+    pipeline first, then run these tests to verify alignment.
+    """
+
+    @staticmethod
+    def _data_exists():
+        """Check if pipeline artifacts exist for integration tests."""
+        from pathlib import Path
+        data_dir = Path("data")
+        raw_path = data_dir / "raw" / "issue_pr_pairs.parquet"
+        nlp_path = data_dir / "processed" / "nlp_features.parquet"
+        return raw_path.exists() and nlp_path.exists()
+
+    @pytest.mark.skipif(
+        not __import__("pathlib").Path("data/raw/issue_pr_pairs.parquet").exists(),
+        reason="Raw data not available — run pipeline first"
+    )
+    def test_raw_data_and_nlp_features_same_length(self):
+        """Raw data and NLP features must have the same number of rows."""
+        from pathlib import Path
+        raw = pd.read_parquet(Path("data/raw/issue_pr_pairs.parquet"))
+        nlp = pd.read_parquet(Path("data/processed/nlp_features.parquet"))
+        assert len(raw) == len(nlp), \
+            f"Row count mismatch: raw={len(raw)}, nlp={len(nlp)}. Re-run nlp_features after clean_data."
+
+    @pytest.mark.skipif(
+        not __import__("pathlib").Path("data/raw/issue_pr_pairs.parquet").exists(),
+        reason="Raw data not available — run pipeline first"
+    )
+    def test_duration_filter_preserves_alignment(self):
+        """After duration filter, df and features must still be aligned."""
+        from pathlib import Path
+        raw = pd.read_parquet(Path("data/raw/issue_pr_pairs.parquet"))
+        nlp = pd.read_parquet(Path("data/processed/nlp_features.parquet"))
+
+        # Apply the same filter step_train uses
+        mask = (raw["duration_hours"] >= 1) & (raw["duration_hours"] <= 2160)
+        keep_idx = mask[mask].index.tolist()
+
+        raw_filtered = raw.loc[keep_idx].reset_index(drop=True)
+        nlp_filtered = nlp.iloc[keep_idx].reset_index(drop=True)
+
+        assert len(raw_filtered) == len(nlp_filtered), \
+            f"After filter: raw={len(raw_filtered)}, nlp={len(nlp_filtered)}"
+        assert len(raw_filtered) > 0, "Duration filter removed all samples"
+
+    @pytest.mark.skipif(
+        not (__import__("pathlib").Path("data/raw/issue_pr_pairs.parquet").exists()
+             and __import__("pathlib").Path("data/processed/repo_features.parquet").exists()),
+        reason="Raw data or repo features not available"
+    )
+    def test_repo_features_alignment(self):
+        """Repo features must align with raw data after duration filter."""
+        from pathlib import Path
+        raw = pd.read_parquet(Path("data/raw/issue_pr_pairs.parquet"))
+        repo = pd.read_parquet(Path("data/processed/repo_features.parquet"))
+
+        assert len(raw) == len(repo), \
+            f"Row count mismatch: raw={len(raw)}, repo={len(repo)}. Re-run repo_features after clean_data."
+
+        mask = (raw["duration_hours"] >= 1) & (raw["duration_hours"] <= 2160)
+        keep_idx = mask[mask].index.tolist()
+
+        raw_filtered = raw.loc[keep_idx].reset_index(drop=True)
+        repo_filtered = repo.iloc[keep_idx].reset_index(drop=True)
+
+        assert len(raw_filtered) == len(repo_filtered), \
+            f"After filter: raw={len(raw_filtered)}, repo={len(repo_filtered)}"
+
+    @pytest.mark.skipif(
+        not __import__("pathlib").Path("data/raw/issue_pr_pairs.parquet").exists(),
+        reason="Raw data not available"
+    )
+    def test_no_negative_durations(self):
+        """Cleaned data should have no negative or zero durations."""
+        from pathlib import Path
+        raw = pd.read_parquet(Path("data/raw/issue_pr_pairs.parquet"))
+        assert (raw["duration_hours"] > 0).all(), \
+            f"Found {(raw['duration_hours'] <= 0).sum()} non-positive durations"
+
+    @pytest.mark.skipif(
+        not __import__("pathlib").Path("data/raw/issue_pr_pairs.parquet").exists(),
+        reason="Raw data not available"
+    )
+    def test_no_duplicate_issues(self):
+        """No duplicate repo+issue_number pairs after cleaning."""
+        from pathlib import Path
+        raw = pd.read_parquet(Path("data/raw/issue_pr_pairs.parquet"))
+        dupes = raw.duplicated(subset=["repo", "issue_number"], keep=False).sum()
+        assert dupes == 0, f"Found {dupes} duplicate repo+issue_number pairs"
+
+    @pytest.mark.skipif(
+        not __import__("pathlib").Path("data/raw/issue_pr_pairs.parquet").exists(),
+        reason="Raw data not available"
+    )
+    def test_no_singleton_repos(self):
+        """No repos with fewer than 10 samples after cleaning."""
+        from pathlib import Path
+        raw = pd.read_parquet(Path("data/raw/issue_pr_pairs.parquet"))
+        repo_counts = raw["repo"].value_counts()
+        small = repo_counts[repo_counts < 10]
+        assert len(small) == 0, f"Found singleton repos: {small.to_dict()}"
+
+    @pytest.mark.skipif(
+        not __import__("pathlib").Path("models/model_a_text_only/results.json").exists(),
+        reason="Model A not trained"
+    )
+    def test_model_a_test_indices_valid(self):
+        """Model A's saved test_indices must be valid row positions."""
+        import json
+        from pathlib import Path
+
+        with open(Path("models/model_a_text_only/results.json")) as f:
+            results = json.load(f)
+
+        test_indices = results.get("test_indices", [])
+        n_train = results.get("n_train", 0)
+        n_test = results.get("n_test", 0)
+
+        assert len(test_indices) == n_test, \
+            f"test_indices length ({len(test_indices)}) != n_test ({n_test})"
+        assert len(test_indices) > 0, "No test indices saved"
+        assert n_train + n_test > 0, "No samples in train or test"
+
+    @pytest.mark.skipif(
+        not __import__("pathlib").Path("models/model_a_text_only/predictions.csv").exists(),
+        reason="Model A predictions not available"
+    )
+    def test_predictions_have_both_splits(self):
+        """predictions.csv must contain both 'train' and 'test' rows."""
+        from pathlib import Path
+        preds = pd.read_csv(Path("models/model_a_text_only/predictions.csv"))
+        splits = set(preds["split"].unique())
+        assert "train" in splits, "Missing 'train' split in predictions"
+        assert "test" in splits, "Missing 'test' split in predictions"
+        assert (preds["actual_hours"] > 0).all(), "Found non-positive actuals"
