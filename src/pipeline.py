@@ -1149,7 +1149,8 @@ def main():
     parser = argparse.ArgumentParser(description="SE3M Replication Study Pipeline")
     parser.add_argument(
         "--step",
-        choices=["validate", "collect", "merge_data", "features", "nlp_features",
+        choices=["validate", "collect", "merge_data", "data_quality",
+                 "features", "nlp_features",
                  "repo_features", "train_model_a", "train", "analyze",
                  "error_analysis", "examples", "sensitivity",
                  "encoder_ablation", "feature_selection_ablation",
@@ -1186,6 +1187,7 @@ def main():
         "validate": step_validate,
         "collect": step_collect,
         "merge_data": lambda c: step_merge_data(c, merge_path=args.merge_from),
+        "data_quality": lambda c: __import__("src.analysis.data_quality", fromlist=["run_data_quality_report"]).run_data_quality_report(),
         "features": step_features,
         "nlp_features": step_nlp_features,
         "repo_features": step_repo_features,
