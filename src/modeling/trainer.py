@@ -431,7 +431,7 @@ class ModelTrainer:
         logger.info(f"    PRED(25): {metrics['pred_25']:.1f}%")
         logger.info(f"    PRED(50): {metrics['pred_50']:.1f}%")
         logger.info(f"    R2:       {metrics['r2']:.4f}")
-        logger.info(f"    SA:       {metrics['sa']:.1f}%")
+        logger.info(f"    SA:       {metrics['sa']:.1f}% (MAE_P0={metrics.get('mae_p0', 0):.1f}h, Glass delta={metrics.get('glass_delta', 0):.2f})")
 
     def _save_result(self, result: ModelResult, model: XGBRegressor,
                       scaler=None, reducer=None, method="pca"):
@@ -506,7 +506,7 @@ class ModelTrainer:
         # Proper computation: MAE of random guessing is estimated by
         # sampling 1,000 times from the training distribution and averaging.
         sa_baseline_source = train_actuals if train_actuals is not None else actuals
-        sa = self._compute_sa(errors, actuals, sa_baseline_source)
+        sa_result = self._compute_sa(errors, actuals, sa_baseline_source)
 
         metrics = {
             "mae": float(np.mean(errors)),
@@ -514,22 +514,28 @@ class ModelTrainer:
             "mre": float(np.mean(relative_errors)),
             "pred_25": float(np.mean(relative_errors <= 0.25) * 100),
             "pred_50": float(np.mean(relative_errors <= 0.50) * 100),
-            "r2": float(1 - np.sum(errors**2) / np.sum((actuals - np.mean(actuals))**2)),
-            "sa": sa,
+            "r2": float(1 - np.sum((actuals - predictions)**2) / np.sum((actuals - np.mean(actuals))**2)),
+            "sa": sa_result["sa"],
+            "mae_p0": sa_result["mae_p0"],
+            "std_p0": sa_result["std_p0"],
+            "glass_delta": sa_result["glass_delta"],
         }
         return metrics
 
     def _compute_sa(self, model_errors: np.ndarray, test_actuals: np.ndarray,
-                     train_actuals: np.ndarray, n_runs: int = 1000) -> float:
+                     train_actuals: np.ndarray, n_runs: int = 1000) -> dict:
         """Compute Standardized Accuracy with proper random baseline.
 
-        SA = 1 - (MAE_model / MAE_random) × 100
+        SA = (1 - MAE_model / MAE_P0) × 100
 
-        MAE_random is computed by:
+        MAE_P0 is the mean MAE of random guessing, computed by:
         1. Randomly sampling (with replacement) from train_actuals
         2. Using each sample as a "prediction" for a test sample
         3. Computing MAE of these random predictions
         4. Repeating n_runs times and averaging
+
+        Also computes Glass's delta effect size:
+        Δ = (MAE_P0 - MAE_model) / std(MAE_P0)
 
         This follows Shepperd & MacDonell (2012) and addresses the
         methodological concern raised by Tawosi et al. (2023) about
@@ -538,6 +544,9 @@ class ModelTrainer:
         References:
             Shepperd, M. & MacDonell, S. (2012). Evaluating prediction
             systems in software project estimation. IST, 54(8), 820-827.
+
+        Returns:
+            dict with keys: sa, mae_p0, std_p0, glass_delta
         """
         rng = np.random.RandomState(self.seed)
         n_test = len(test_actuals)
@@ -550,11 +559,21 @@ class ModelTrainer:
             random_maes.append(float(np.mean(random_errors)))
 
         mean_random_mae = float(np.mean(random_maes))
+        std_random_mae = float(np.std(random_maes, ddof=1))
 
         if mean_random_mae == 0:
-            return 0.0
+            return {"sa": 0.0, "mae_p0": 0.0, "std_p0": 0.0, "glass_delta": 0.0}
 
-        return float((1 - model_mae / mean_random_mae) * 100)
+        sa = (1 - model_mae / mean_random_mae) * 100
+        glass_delta = ((mean_random_mae - model_mae) / std_random_mae
+                       if std_random_mae > 0 else 0.0)
+
+        return {
+            "sa": float(sa),
+            "mae_p0": float(mean_random_mae),
+            "std_p0": float(std_random_mae),
+            "glass_delta": float(glass_delta),
+        }
 
     def compare_models(
         self, result_a: ModelResult, result_b: ModelResult, result_c: ModelResult
