@@ -209,11 +209,26 @@ class TestLogTransform:
 # ── Test 5: Metric Computation ────────────────────────────────────── #
 
 class TestMetrics:
-    def _compute_metrics(self, actuals, predictions):
-        """Standalone metric computation (no heavy imports needed)."""
+    def _compute_metrics(self, actuals, predictions, train_actuals=None):
+        """Standalone metric computation with proper SA (no heavy imports needed).
+
+        SA uses 1,000 random samplings from train_actuals as baseline,
+        following Shepperd & MacDonell (2012).
+        """
         errors = np.abs(actuals - predictions)
         relative_errors = errors / np.maximum(actuals, 1e-6)
-        mean_baseline_errors = np.abs(actuals - np.mean(actuals))
+
+        # Proper SA with 1,000 random runs
+        baseline_source = train_actuals if train_actuals is not None else actuals
+        rng = np.random.RandomState(42)
+        model_mae = np.mean(errors)
+        random_maes = []
+        for _ in range(1000):
+            random_preds = rng.choice(baseline_source, size=len(actuals), replace=True)
+            random_maes.append(np.mean(np.abs(actuals - random_preds)))
+        mean_random_mae = np.mean(random_maes)
+        sa = (1 - model_mae / mean_random_mae) * 100 if mean_random_mae > 0 else 0.0
+
         return {
             "mae": float(np.mean(errors)),
             "mdae": float(np.median(errors)),
@@ -221,10 +236,7 @@ class TestMetrics:
             "pred_25": float(np.mean(relative_errors <= 0.25) * 100),
             "pred_50": float(np.mean(relative_errors <= 0.50) * 100),
             "r2": float(1 - np.sum(errors**2) / np.sum((actuals - np.mean(actuals))**2)),
-            "sa": float(
-                (1 - np.sum(errors) / np.sum(mean_baseline_errors)) * 100
-                if np.sum(mean_baseline_errors) > 0 else 0
-            ),
+            "sa": float(sa),
         }
 
     def test_perfect_prediction(self):
@@ -240,13 +252,19 @@ class TestMetrics:
         assert abs(metrics["r2"] - 1.0) < 1e-10
         assert abs(metrics["sa"] - 100.0) < 1e-10
 
-    def test_mean_prediction_gives_sa_zero(self):
-        """Predicting the mean for everything should give SA ≈ 0%."""
+    def test_mean_prediction_gives_positive_sa(self):
+        """Predicting the mean should give SA > 0% (mean beats random guessing).
+
+        With the proper Shepperd & MacDonell SA definition (1,000 random
+        samples), predicting the mean IS better than random guessing because
+        the mean minimizes MAE for symmetric distributions. SA > 0 is correct.
+        """
         actuals = np.array([10.0, 20.0, 30.0, 40.0, 50.0])
         predictions = np.full_like(actuals, actuals.mean())
 
         metrics = self._compute_metrics(actuals, predictions)
-        assert abs(metrics["sa"]) < 1e-10, f"SA should be ~0 for mean prediction, got {metrics['sa']}"
+        assert metrics["sa"] > 0, f"Mean prediction should beat random guessing, got SA={metrics['sa']}"
+        assert metrics["sa"] < 50, f"Mean prediction SA should be modest, got {metrics['sa']}"
 
     def test_known_mae(self):
         """MAE should be the mean of absolute errors."""
