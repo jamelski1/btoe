@@ -1248,6 +1248,18 @@ def step_analyze(config: dict):
     logger.info(f"Analysis report saved to {out_path}")
 
 
+def step_shap_analysis(config: dict):
+    """Step: SHAP value analysis for trained models.
+
+    Computes per-feature SHAP values using TreeExplainer and generates:
+    - shap_summary.png (beeswarm plot — direction + magnitude)
+    - shap_bar.png (mean |SHAP| bar chart)
+    - shap_values.csv (mean absolute SHAP per feature)
+    """
+    from src.analysis.shap_analysis import run_shap_analysis
+    run_shap_analysis(model_key=None)
+
+
 def main():
     parser = argparse.ArgumentParser(description="SE3M Replication Study Pipeline")
     parser.add_argument(
@@ -1255,7 +1267,7 @@ def main():
         choices=["validate", "collect", "merge_data", "clean_data", "data_quality",
                  "features", "nlp_features",
                  "repo_features", "train_model_a", "train", "analyze",
-                 "error_analysis", "examples", "sensitivity",
+                 "error_analysis", "shap_analysis", "examples", "sensitivity",
                  "encoder_ablation", "feature_selection_ablation",
                  "dimensionality_sweep", "all"],
         required=True,
@@ -1299,6 +1311,7 @@ def main():
         "train": step_train,
         "analyze": step_analyze,
         "error_analysis": step_error_analysis,
+        "shap_analysis": step_shap_analysis,
         "examples": step_examples,
         "sensitivity": step_sensitivity,
         "encoder_ablation": step_encoder_ablation,
