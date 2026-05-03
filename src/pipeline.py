@@ -55,6 +55,109 @@ def step_validate(config: dict):
     return results
 
 
+def step_clean_data(config: dict):
+    """Step 1.5: Clean raw dataset by removing known data quality issues.
+
+    Removes:
+    - Repos with < 10 samples (stray/singleton repos)
+    - Empty issue bodies (no text = no signal for NLP)
+    - Samples with 0 files changed (likely data errors)
+    - Duplicate repo+issue_number pairs
+
+    Saves cleaned data back to the same file (backs up original first).
+    """
+    import shutil
+
+    data_dir = get_data_dir()
+    df = _load_raw_data()
+    n_original = len(df)
+
+    logger.info(f"{'='*60}")
+    logger.info(f"Cleaning dataset: {n_original} samples")
+    logger.info(f"{'='*60}")
+
+    # 1. Remove repos with < 10 samples
+    repo_counts = df["repo"].value_counts()
+    small_repos = repo_counts[repo_counts < 10].index.tolist()
+    if small_repos:
+        n_before = len(df)
+        df = df[~df["repo"].isin(small_repos)]
+        logger.info(f"  Dropped {n_before - len(df)} samples from small repos: {small_repos}")
+
+    # 2. Remove empty issue bodies
+    empty_body_mask = df["issue_body"].fillna("").str.strip() == ""
+    n_empty = empty_body_mask.sum()
+    if n_empty > 0:
+        df = df[~empty_body_mask]
+        logger.info(f"  Dropped {n_empty} samples with empty issue_body")
+
+    # 3. Remove 0 files changed
+    if "num_files_changed" in df.columns:
+        zero_files = (df["num_files_changed"] == 0).sum()
+        if zero_files > 0:
+            df = df[df["num_files_changed"] > 0]
+            logger.info(f"  Dropped {zero_files} samples with 0 files changed")
+
+    # 4. Standardize duration measurement
+    # Use issue_created_at → pr_merged_at for ALL pairs (consistent measurement).
+    # Previously, pairs with issue_assigned_at used assignment→merge while others
+    # used creation→merge, mixing two different duration definitions.
+    if "issue_created_at" in df.columns and "pr_merged_at" in df.columns:
+        has_assigned = df["issue_assigned_at"].notna().sum() if "issue_assigned_at" in df.columns else 0
+        created = pd.to_datetime(df["issue_created_at"])
+        merged = pd.to_datetime(df["pr_merged_at"])
+        df["duration_hours"] = (merged - created).dt.total_seconds() / 3600
+        logger.info(f"  Standardized duration: issue_created_at -> pr_merged_at for all {len(df)} pairs")
+        logger.info(f"    (previously {has_assigned} used assignment time, {len(df) - has_assigned} used creation time)")
+
+    # 5. Deduplicate
+    n_before = len(df)
+    df = df.drop_duplicates(subset=["repo", "issue_number"], keep="first")
+    n_dupes = n_before - len(df)
+    if n_dupes > 0:
+        logger.info(f"  Dropped {n_dupes} duplicate repo+issue_number pairs")
+
+    # 6. Re-apply duration filter (some may now be negative or out of bounds)
+    dur_before = len(df)
+    df = df[df["duration_hours"] > 0]
+    if len(df) < dur_before:
+        logger.info(f"  Dropped {dur_before - len(df)} samples with non-positive standardized duration")
+
+    df = df.reset_index(drop=True)
+    n_final = len(df)
+    n_removed = n_original - n_final
+
+    logger.info(f"\n  Summary: {n_original} -> {n_final} samples ({n_removed} removed, {n_removed/n_original*100:.1f}%)")
+
+    # Show final per-repo breakdown
+    logger.info(f"\n  Final per-repo distribution:")
+    for repo, count in df["repo"].value_counts().items():
+        logger.info(f"    {repo}: {count} ({count/n_final*100:.1f}%)")
+
+    # Backup original and save cleaned version
+    raw_path = data_dir / "raw" / "issue_pr_pairs.parquet"
+    backup_path = data_dir / "raw" / "issue_pr_pairs_pre_clean.parquet"
+
+    if raw_path.exists() and not backup_path.exists():
+        shutil.copy2(raw_path, backup_path)
+        logger.info(f"\n  Original backed up to {backup_path}")
+
+    try:
+        df.to_parquet(raw_path, index=False)
+    except ImportError:
+        csv_path = raw_path.with_suffix(".csv")
+        df.to_csv(csv_path, index=False)
+        raw_path = csv_path
+
+    logger.info(f"  Cleaned data saved to {raw_path}")
+    logger.info(f"\n  NEXT STEPS: re-extract features and retrain:")
+    logger.info(f"    python -m src.pipeline --step nlp_features")
+    logger.info(f"    python -m src.pipeline --step train")
+    logger.info(f"{'='*60}")
+
+    return df
+
+
 def step_collect(config: dict):
     """Step 2: Mine issue-PR pairs from validated repositories."""
     from src.data_collection.github_miner import GitHubMiner
@@ -493,9 +596,10 @@ def step_train(config: dict):
     max_hours = config["filtering"]["max_duration_days"] * 24
     min_hours = config["filtering"]["min_duration_hours"]
     mask = (df["duration_hours"] >= min_hours) & (df["duration_hours"] <= max_hours)
+    keep_idx = mask[mask].index.tolist()
     n_before = len(df)
-    df = df[mask].reset_index(drop=True)
-    nlp_features = nlp_features[mask].reset_index(drop=True)
+    df = df.loc[keep_idx].reset_index(drop=True)
+    nlp_features = nlp_features.iloc[keep_idx].reset_index(drop=True)
     n_after = len(df)
     if n_before != n_after:
         logger.info(f"  Duration filter: {n_before} -> {n_after} samples "
@@ -510,7 +614,7 @@ def step_train(config: dict):
     # Model B: Repo-only (skip if not yet extracted)
     try:
         repo_features = _load_features("repo_features")
-        repo_features = repo_features[mask].reset_index(drop=True)
+        repo_features = repo_features.iloc[keep_idx].reset_index(drop=True)
         result_b = trainer.train_and_evaluate(repo_features, y, "model_b_repo_only")
 
         # Model C: Combined
@@ -627,6 +731,8 @@ def step_feature_selection_ablation(config: dict):
     configurations = [
         ("pca", 20),
         ("pca", 50),
+        ("pls", 20),
+        ("pls", 50),
         ("topk", 20),
         ("topk", 50),
         ("none", 768),
@@ -653,6 +759,8 @@ def step_feature_selection_ablation(config: dict):
             cfg.setdefault("pca", {})["n_components"] = k
         elif method == "topk":
             cfg.setdefault("topk", {})["k"] = k
+        elif method == "pls":
+            cfg.setdefault("pls", {})["n_components"] = k
 
         trainer = ModelTrainer(cfg)
         result = trainer.train_and_evaluate(
@@ -1141,13 +1249,26 @@ def step_analyze(config: dict):
     logger.info(f"Analysis report saved to {out_path}")
 
 
+def step_shap_analysis(config: dict):
+    """Step: SHAP value analysis for trained models.
+
+    Computes per-feature SHAP values using TreeExplainer and generates:
+    - shap_summary.png (beeswarm plot — direction + magnitude)
+    - shap_bar.png (mean |SHAP| bar chart)
+    - shap_values.csv (mean absolute SHAP per feature)
+    """
+    from src.analysis.shap_analysis import run_shap_analysis
+    run_shap_analysis(model_key=None)
+
+
 def main():
     parser = argparse.ArgumentParser(description="SE3M Replication Study Pipeline")
     parser.add_argument(
         "--step",
-        choices=["validate", "collect", "merge_data", "features", "nlp_features",
+        choices=["validate", "collect", "merge_data", "clean_data", "data_quality",
+                 "features", "nlp_features",
                  "repo_features", "train_model_a", "train", "analyze",
-                 "error_analysis", "examples", "sensitivity",
+                 "error_analysis", "shap_analysis", "examples", "sensitivity",
                  "encoder_ablation", "feature_selection_ablation",
                  "dimensionality_sweep", "all"],
         required=True,
@@ -1182,6 +1303,8 @@ def main():
         "validate": step_validate,
         "collect": step_collect,
         "merge_data": lambda c: step_merge_data(c, merge_path=args.merge_from),
+        "clean_data": step_clean_data,
+        "data_quality": lambda c: __import__("src.analysis.data_quality", fromlist=["run_data_quality_report"]).run_data_quality_report(),
         "features": step_features,
         "nlp_features": step_nlp_features,
         "repo_features": step_repo_features,
@@ -1189,6 +1312,7 @@ def main():
         "train": step_train,
         "analyze": step_analyze,
         "error_analysis": step_error_analysis,
+        "shap_analysis": step_shap_analysis,
         "examples": step_examples,
         "sensitivity": step_sensitivity,
         "encoder_ablation": step_encoder_ablation,

@@ -92,16 +92,28 @@ class NLPFeatureExtractor:
         total_start = time.time()
 
         # Combine requirement text
-        logger.info("Combining requirement texts (issue title + body + PR title + body)...")
-        texts = (
-            df["issue_title"].fillna("")
-            + " "
-            + df["issue_body"].fillna("")
-            + " "
-            + df["pr_title"].fillna("")
-            + " "
-            + df["pr_body"].fillna("")
-        ).tolist()
+        # By default use only issue text (available at estimation time).
+        # Set nlp.include_pr_text=true to also include PR text (post-hoc only).
+        include_pr = self.config.get("nlp", {}).get("include_pr_text", False)
+
+        if include_pr:
+            logger.info("Combining requirement texts (issue title + body + PR title + body)...")
+            texts = (
+                df["issue_title"].fillna("")
+                + " "
+                + df["issue_body"].fillna("")
+                + " "
+                + df["pr_title"].fillna("")
+                + " "
+                + df["pr_body"].fillna("")
+            ).tolist()
+        else:
+            logger.info("Combining requirement texts (issue title + body only)...")
+            texts = (
+                df["issue_title"].fillna("")
+                + " "
+                + df["issue_body"].fillna("")
+            ).tolist()
         logger.info(f"  {len(texts)} texts prepared, avg length: {sum(len(t) for t in texts) / max(len(texts), 1):.0f} chars")
 
         # Generate embeddings

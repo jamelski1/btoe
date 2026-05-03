@@ -19,6 +19,7 @@ import joblib
 import numpy as np
 import pandas as pd
 from scipy import stats
+from sklearn.cross_decomposition import PLSRegression
 from sklearn.decomposition import PCA
 from sklearn.feature_selection import SelectKBest, f_regression
 from sklearn.model_selection import KFold, cross_val_predict, train_test_split
@@ -188,6 +189,64 @@ class ModelTrainer:
 
         return pd.concat([topk_df, other_df], axis=1)
 
+    def reduce_embeddings_pls(self, X: pd.DataFrame, y: pd.Series,
+                               n_components: int = None) -> tuple:
+        """Apply PLS to embedding columns, keeping derived features intact.
+
+        PLS (Partial Least Squares) finds linear combinations of X that
+        maximize covariance with y — supervised dimensionality reduction.
+        """
+        emb_cols = [c for c in X.columns if c.startswith("emb_")]
+        other_cols = [c for c in X.columns if not c.startswith("emb_")]
+
+        if not emb_cols:
+            logger.info("  No embedding columns found, skipping PLS")
+            return X, None, None
+
+        n_emb = len(emb_cols)
+        if n_components is None:
+            cfg_k = self.config.get("pls", {}).get("n_components", 50)
+            n_components = min(cfg_k, len(X) // 5)
+        n_components = min(n_components, n_emb, len(X))
+
+        logger.info(f"  PLS: reducing {n_emb} embedding dims -> {n_components} components")
+
+        scaler = StandardScaler()
+        emb_scaled = scaler.fit_transform(X[emb_cols])
+
+        pls = PLSRegression(n_components=n_components)
+        emb_pls = pls.fit_transform(emb_scaled, y)[0]
+
+        logger.info(f"  PLS: {n_components} components fitted (supervised on target)")
+
+        pls_cols = [f"pls_{i}" for i in range(n_components)]
+        pls_df = pd.DataFrame(emb_pls, index=X.index, columns=pls_cols)
+        other_df = X[other_cols].reset_index(drop=True)
+        pls_df = pls_df.reset_index(drop=True)
+
+        X_reduced = pd.concat([pls_df, other_df], axis=1)
+        logger.info(f"  Final feature set: {len(pls_cols)} PLS + {len(other_cols)} derived = {X_reduced.shape[1]} features")
+
+        return X_reduced, scaler, pls
+
+    def transform_embeddings_pls(self, X: pd.DataFrame, scaler, pls) -> pd.DataFrame:
+        """Apply a previously fitted PLS transform to new data."""
+        emb_cols = [c for c in X.columns if c.startswith("emb_")]
+        other_cols = [c for c in X.columns if not c.startswith("emb_")]
+
+        if scaler is None or pls is None:
+            return X
+
+        emb_scaled = scaler.transform(X[emb_cols])
+        emb_pls = pls.transform(emb_scaled)
+
+        pls_cols = [f"pls_{i}" for i in range(emb_pls.shape[1])]
+        pls_df = pd.DataFrame(emb_pls, index=X.index, columns=pls_cols)
+        other_df = X[other_cols].reset_index(drop=True)
+        pls_df = pls_df.reset_index(drop=True)
+
+        return pd.concat([pls_df, other_df], axis=1)
+
     def get_search_space(self) -> dict:
         """Define Bayesian optimization search space for XGBoost."""
         return {
@@ -237,31 +296,34 @@ class ModelTrainer:
         logger.info(f"  Target stats (train): mean={y_train.mean():.1f}h, median={y_train.median():.1f}h, std={y_train.std():.1f}h")
         logger.info(f"  Target stats (test):  mean={y_test.mean():.1f}h, median={y_test.median():.1f}h, std={y_test.std():.1f}h")
 
-        # --- Feature selection on embeddings (fit on train only) ---
-        # Selection method: "pca" (default), "topk", or "none" (use all 768 dims)
-        method = self.config.get("feature_selection", {}).get("method", "pca")
-        emb_cols = [c for c in X_train.columns if c.startswith("emb_")]
-
-        if not emb_cols:
-            scaler, pca, selector = None, None, None
-        elif method == "none":
-            logger.info(f"  No dimensionality reduction: using all {len(emb_cols)} embedding dims + "
-                        f"{len(X_train.columns) - len(emb_cols)} derived = {len(X_train.columns)} features")
-            scaler, pca, selector = None, None, None
-        elif method == "topk":
-            X_train, scaler, selector = self.select_topk_embeddings(X_train, y_train)
-            X_test = self.transform_topk_embeddings(X_test, scaler, selector)
-            pca = None
-        else:  # pca (default)
-            X_train, scaler, pca = self.reduce_embeddings(X_train)
-            X_test = self.transform_embeddings(X_test, scaler, pca)
-            selector = None
-
         # --- Log-transform target to handle skewed distribution ---
         y_train_log = np.log1p(y_train)
         y_test_log = np.log1p(y_test)
         logger.info(f"  Log-transformed target: train range [{y_train_log.min():.2f}, {y_train_log.max():.2f}], "
                      f"test range [{y_test_log.min():.2f}, {y_test_log.max():.2f}]")
+
+        # --- Feature selection on embeddings (fit on train only) ---
+        # Selection method: "pca" (default), "topk", "pls", or "none"
+        method = self.config.get("feature_selection", {}).get("method", "pca")
+        emb_cols = [c for c in X_train.columns if c.startswith("emb_")]
+
+        # reducer stores the fitted transform object (PCA, PLS, or SelectKBest)
+        scaler, reducer = None, None
+
+        if not emb_cols:
+            pass
+        elif method == "none":
+            logger.info(f"  No dimensionality reduction: using all {len(emb_cols)} embedding dims + "
+                        f"{len(X_train.columns) - len(emb_cols)} derived = {len(X_train.columns)} features")
+        elif method == "topk":
+            X_train, scaler, reducer = self.select_topk_embeddings(X_train, y_train)
+            X_test = self.transform_topk_embeddings(X_test, scaler, reducer)
+        elif method == "pls":
+            X_train, scaler, reducer = self.reduce_embeddings_pls(X_train, y_train_log)
+            X_test = self.transform_embeddings_pls(X_test, scaler, reducer)
+        else:  # pca (default)
+            X_train, scaler, reducer = self.reduce_embeddings(X_train)
+            X_test = self.transform_embeddings(X_test, scaler, reducer)
 
         # --- Step 2: Bayesian hyperparameter optimization on train set ---
         logger.info(f"  Starting Bayesian optimization ({self.model_cfg['bayes_opt']['n_calls']} iterations, {self.model_cfg['cv_folds']}-fold CV)...")
@@ -318,7 +380,8 @@ class ModelTrainer:
         train_cv_predictions = np.expm1(train_cv_preds_log)
         train_cv_predictions = np.maximum(train_cv_predictions, 0)  # clip negatives
 
-        train_metrics = self.compute_metrics(y_train.values, train_cv_predictions)
+        train_metrics = self.compute_metrics(y_train.values, train_cv_predictions,
+                                                train_actuals=y_train.values)
         logger.info(f"  Train CV metrics (in original hours):")
         self._log_metrics(train_metrics)
 
@@ -331,7 +394,8 @@ class ModelTrainer:
         test_predictions = np.expm1(test_preds_log)
         test_predictions = np.maximum(test_predictions, 0)
 
-        test_metrics = self.compute_metrics(y_test.values, test_predictions)
+        test_metrics = self.compute_metrics(y_test.values, test_predictions,
+                                              train_actuals=y_train.values)
         logger.info(f"  Test set metrics:")
         self._log_metrics(test_metrics)
 
@@ -350,7 +414,7 @@ class ModelTrainer:
             test_indices=X_test.index.values,
         )
 
-        self._save_result(result, best_model, scaler=scaler, pca=pca, selector=selector)
+        self._save_result(result, best_model, scaler=scaler, reducer=reducer, method=method)
 
         total_elapsed = time.time() - total_start
         logger.info(f"{'='*60}")
@@ -370,21 +434,26 @@ class ModelTrainer:
         logger.info(f"    SA:       {metrics['sa']:.1f}%")
 
     def _save_result(self, result: ModelResult, model: XGBRegressor,
-                      scaler=None, pca=None, selector=None):
+                      scaler=None, reducer=None, method="pca"):
         """Save model artifact and results JSON to disk."""
         model_dir = get_model_dir() / result.name
         model_dir.mkdir(parents=True, exist_ok=True)
 
-        # Save scaler if used
+        # Save scaler and reducer
         if scaler is not None:
             joblib.dump(scaler, model_dir / "scaler.joblib")
-        if pca is not None:
-            joblib.dump(pca, model_dir / "pca.joblib")
-            logger.info(f"  PCA ({pca.n_components_} components, "
-                        f"{pca.explained_variance_ratio_.sum()*100:.1f}% variance) saved")
-        if selector is not None:
-            joblib.dump(selector, model_dir / "selector.joblib")
-            logger.info(f"  Top-K selector ({selector.k} features) saved")
+        if reducer is not None:
+            # Save under a generic name + method-specific name for compatibility
+            joblib.dump(reducer, model_dir / "reducer.joblib")
+            if method == "pca":
+                joblib.dump(reducer, model_dir / "pca.joblib")
+                logger.info(f"  PCA ({reducer.n_components_} components, "
+                            f"{reducer.explained_variance_ratio_.sum()*100:.1f}% variance) saved")
+            elif method == "topk":
+                joblib.dump(reducer, model_dir / "selector.joblib")
+                logger.info(f"  Top-K selector ({reducer.k} features) saved")
+            elif method == "pls":
+                logger.info(f"  PLS ({reducer.n_components} components) saved")
 
         # Save trained model
         model_path = model_dir / "model.joblib"
@@ -420,13 +489,24 @@ class ModelTrainer:
         preds_df.to_csv(preds_path, index=False)
         logger.info(f"  Predictions saved to {preds_path}")
 
-    def compute_metrics(self, actuals: np.ndarray, predictions: np.ndarray) -> dict:
-        """Compute all evaluation metrics."""
+    def compute_metrics(self, actuals: np.ndarray, predictions: np.ndarray,
+                         train_actuals: np.ndarray = None) -> dict:
+        """Compute all evaluation metrics.
+
+        Args:
+            actuals: True values
+            predictions: Model predictions
+            train_actuals: Training set actuals for proper SA random baseline.
+                If None, uses test actuals as the sampling distribution (less rigorous).
+        """
         errors = np.abs(actuals - predictions)
         relative_errors = errors / np.maximum(actuals, 1e-6)
 
-        # Mean baseline for SA
-        mean_baseline_errors = np.abs(actuals - np.mean(actuals))
+        # SA: Standardized Accuracy (Shepperd & MacDonell, 2012)
+        # Proper computation: MAE of random guessing is estimated by
+        # sampling 1,000 times from the training distribution and averaging.
+        sa_baseline_source = train_actuals if train_actuals is not None else actuals
+        sa = self._compute_sa(errors, actuals, sa_baseline_source)
 
         metrics = {
             "mae": float(np.mean(errors)),
@@ -435,13 +515,46 @@ class ModelTrainer:
             "pred_25": float(np.mean(relative_errors <= 0.25) * 100),
             "pred_50": float(np.mean(relative_errors <= 0.50) * 100),
             "r2": float(1 - np.sum(errors**2) / np.sum((actuals - np.mean(actuals))**2)),
-            "sa": float(
-                (1 - np.sum(errors) / np.sum(mean_baseline_errors)) * 100
-                if np.sum(mean_baseline_errors) > 0
-                else 0
-            ),
+            "sa": sa,
         }
         return metrics
+
+    def _compute_sa(self, model_errors: np.ndarray, test_actuals: np.ndarray,
+                     train_actuals: np.ndarray, n_runs: int = 1000) -> float:
+        """Compute Standardized Accuracy with proper random baseline.
+
+        SA = 1 - (MAE_model / MAE_random) × 100
+
+        MAE_random is computed by:
+        1. Randomly sampling (with replacement) from train_actuals
+        2. Using each sample as a "prediction" for a test sample
+        3. Computing MAE of these random predictions
+        4. Repeating n_runs times and averaging
+
+        This follows Shepperd & MacDonell (2012) and addresses the
+        methodological concern raised by Tawosi et al. (2023) about
+        single-run random baselines.
+
+        References:
+            Shepperd, M. & MacDonell, S. (2012). Evaluating prediction
+            systems in software project estimation. IST, 54(8), 820-827.
+        """
+        rng = np.random.RandomState(self.seed)
+        n_test = len(test_actuals)
+        model_mae = float(np.mean(model_errors))
+
+        random_maes = []
+        for _ in range(n_runs):
+            random_preds = rng.choice(train_actuals, size=n_test, replace=True)
+            random_errors = np.abs(test_actuals - random_preds)
+            random_maes.append(float(np.mean(random_errors)))
+
+        mean_random_mae = float(np.mean(random_maes))
+
+        if mean_random_mae == 0:
+            return 0.0
+
+        return float((1 - model_mae / mean_random_mae) * 100)
 
     def compare_models(
         self, result_a: ModelResult, result_b: ModelResult, result_c: ModelResult
