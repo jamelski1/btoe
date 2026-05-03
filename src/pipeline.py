@@ -653,6 +653,54 @@ def step_train_model_b_no_numfiles(config: dict):
             print(f"    {fname}: {imp:.4f}")
         print()
 
+    # Wilcoxon + Cliff's delta between the two Model B versions
+    original_preds_path = get_model_dir() / "model_b_repo_only" / "predictions.csv"
+    new_preds_path = get_model_dir() / "model_b_repo_no_numfiles" / "predictions.csv"
+
+    if original_preds_path.exists() and new_preds_path.exists():
+        from scipy import stats
+
+        orig_preds = pd.read_csv(original_preds_path)
+        new_preds = pd.read_csv(new_preds_path)
+
+        orig_test = orig_preds[orig_preds["split"] == "test"]
+        new_test = new_preds[new_preds["split"] == "test"]
+
+        errors_with = np.abs(orig_test["actual_hours"].values - orig_test["predicted_hours"].values)
+        errors_without = np.abs(new_test["actual_hours"].values - new_test["predicted_hours"].values)
+
+        if len(errors_with) == len(errors_without):
+            # Wilcoxon signed-rank test
+            try:
+                w_stat, w_pvalue = stats.wilcoxon(errors_with, errors_without)
+            except ValueError:
+                w_stat, w_pvalue = 0, 1.0
+
+            # Cliff's delta
+            n = len(errors_with)
+            more = int(np.sum(errors_with[:, None] > errors_without[None, :]))
+            less = int(np.sum(errors_with[:, None] < errors_without[None, :]))
+            cliffs_d = (more - less) / (n * n)
+
+            abs_d = abs(cliffs_d)
+            if abs_d < 0.147:
+                effect = "negligible"
+            elif abs_d < 0.33:
+                effect = "small"
+            elif abs_d < 0.474:
+                effect = "medium"
+            else:
+                effect = "large"
+
+            sig = "SIGNIFICANT" if w_pvalue < 0.05 else "not significant"
+
+            print("  STATISTICAL COMPARISON: Model B with vs without num_files")
+            print(f"    Wilcoxon W = {w_stat:.0f}, p = {w_pvalue:.6f} ({sig})")
+            print(f"    Cliff's delta = {cliffs_d:+.4f} ({effect})")
+            print(f"    Mean error with:    {errors_with.mean():.1f}h")
+            print(f"    Mean error without: {errors_without.mean():.1f}h")
+            print()
+
     return result
 
 
