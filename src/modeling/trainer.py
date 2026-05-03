@@ -431,7 +431,7 @@ class ModelTrainer:
         logger.info(f"    PRED(25): {metrics['pred_25']:.1f}%")
         logger.info(f"    PRED(50): {metrics['pred_50']:.1f}%")
         logger.info(f"    R2:       {metrics['r2']:.4f}")
-        logger.info(f"    SA:       {metrics['sa']:.1f}% (MAE_P0={metrics.get('mae_p0', 0):.1f}h, Glass Δ={metrics.get('glass_delta', 0):.2f})")
+        logger.info(f"    SA:       {metrics['sa']:.1f}% (MAE_P0={metrics.get('mae_p0', 0):.1f}h, Glass delta={metrics.get('glass_delta', 0):.2f})")
 
     def _save_result(self, result: ModelResult, model: XGBRegressor,
                       scaler=None, reducer=None, method="pca"):
