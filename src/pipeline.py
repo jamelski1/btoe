@@ -596,9 +596,10 @@ def step_train(config: dict):
     max_hours = config["filtering"]["max_duration_days"] * 24
     min_hours = config["filtering"]["min_duration_hours"]
     mask = (df["duration_hours"] >= min_hours) & (df["duration_hours"] <= max_hours)
+    keep_idx = mask[mask].index.tolist()
     n_before = len(df)
-    df = df[mask].reset_index(drop=True)
-    nlp_features = nlp_features[mask].reset_index(drop=True)
+    df = df.loc[keep_idx].reset_index(drop=True)
+    nlp_features = nlp_features.iloc[keep_idx].reset_index(drop=True)
     n_after = len(df)
     if n_before != n_after:
         logger.info(f"  Duration filter: {n_before} -> {n_after} samples "
@@ -613,7 +614,7 @@ def step_train(config: dict):
     # Model B: Repo-only (skip if not yet extracted)
     try:
         repo_features = _load_features("repo_features")
-        repo_features = repo_features[mask].reset_index(drop=True)
+        repo_features = repo_features.iloc[keep_idx].reset_index(drop=True)
         result_b = trainer.train_and_evaluate(repo_features, y, "model_b_repo_only")
 
         # Model C: Combined
@@ -1248,6 +1249,18 @@ def step_analyze(config: dict):
     logger.info(f"Analysis report saved to {out_path}")
 
 
+def step_shap_analysis(config: dict):
+    """Step: SHAP value analysis for trained models.
+
+    Computes per-feature SHAP values using TreeExplainer and generates:
+    - shap_summary.png (beeswarm plot — direction + magnitude)
+    - shap_bar.png (mean |SHAP| bar chart)
+    - shap_values.csv (mean absolute SHAP per feature)
+    """
+    from src.analysis.shap_analysis import run_shap_analysis
+    run_shap_analysis(model_key=None)
+
+
 def main():
     parser = argparse.ArgumentParser(description="SE3M Replication Study Pipeline")
     parser.add_argument(
@@ -1255,7 +1268,7 @@ def main():
         choices=["validate", "collect", "merge_data", "clean_data", "data_quality",
                  "features", "nlp_features",
                  "repo_features", "train_model_a", "train", "analyze",
-                 "error_analysis", "examples", "sensitivity",
+                 "error_analysis", "shap_analysis", "examples", "sensitivity",
                  "encoder_ablation", "feature_selection_ablation",
                  "dimensionality_sweep", "all"],
         required=True,
@@ -1299,6 +1312,7 @@ def main():
         "train": step_train,
         "analyze": step_analyze,
         "error_analysis": step_error_analysis,
+        "shap_analysis": step_shap_analysis,
         "examples": step_examples,
         "sensitivity": step_sensitivity,
         "encoder_ablation": step_encoder_ablation,
