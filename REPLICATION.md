@@ -83,7 +83,7 @@ btoe/
 ## Key Design Decisions
 
 ### Target Variable
-Elapsed wall-clock time from issue creation to PR merge, measured in hours. This differs from the story-point target used in SE3M (Ribeiro et al., 2022) because story points are unavailable in public GitHub repositories.
+Elapsed wall-clock time from issue creation to PR merge, measured in hours. This differs from the story-point target used in SE3M (Fávero et al., 2022) because story points are unavailable in public GitHub repositories.
 
 ### Feature Extraction
 - **NLP features**: Issue title + body only (PR text excluded to prevent data leakage). Processed through CodeBERT to produce 768-dim embeddings, reduced to 50 PCA components, plus 6 derived features.

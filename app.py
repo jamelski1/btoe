@@ -3,7 +3,7 @@
 Usage:
     python app.py                         # default port 5000
     python app.py --port 8080
-    python app.py --config configs/mansi.yaml
+    python app.py --config configs/default.yaml
 """
 
 import os
