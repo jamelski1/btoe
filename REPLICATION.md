@@ -142,6 +142,14 @@ python -m src.pipeline --step shap_analysis
 pytest tests/test_pipeline_correctness.py -v
 ```
 
+### Repository Clones
+The pipeline automatically clones target repositories during the `repo_features` step via PyDriller. No pre-cloned repositories are included in this package. The repositories used (at the time of data collection, March–April 2026) were:
+- https://github.com/microsoft/vscode
+- https://github.com/kubernetes/kubernetes
+- https://github.com/rust-lang/rust
+- https://github.com/microsoft/TypeScript
+- https://github.com/facebook/react
+
 ## Notes on Reproduction
 
 - **Data collection** depends on GitHub API availability and rate limits. Results may vary slightly if repository content has changed since the original study.
