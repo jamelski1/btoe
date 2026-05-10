@@ -1,4 +1,4 @@
-"""Flask web app — Issue Duration Estimator.
+"""Flask web app — mansi edits.
 
 Usage:
     python app.py                         # default port 5000
@@ -155,5 +155,5 @@ if __name__ == "__main__":
 
     _warmup(get_predictor())
 
-    logger.info("Starting Issue Duration Estimator on http://localhost:%d", args.port)
+    logger.info("Starting mansi edits on http://localhost:%d", args.port)
     app.run(host="0.0.0.0", port=args.port, debug=False)
