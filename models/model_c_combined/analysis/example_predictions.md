@@ -14,17 +14,15 @@ For each actual-duration bucket, this report shows:
 
 ### Best 3 predictions (most accurate)
 
-**microsoft/vscode #301997** — Chat image carousel doesn't always show title
+**microsoft/vscode #245136** — An aria alert should indicate which chat model has been toggled to
 
 - Actual: **3.0h** (3.0h, bucket: < 1 day)
 - Predicted: **9.2h** (9.2h, bucket: 1 day)
 - Error: 6.1h (203% off)
-- Files changed: 2
+- Files changed: 1
 
-> Testing #301610
-Opened the image carousel from a chat, but it doesn't always have a title in the top left. I couldn't figure out how to reproduce this though.
-<img width="1392" height="1294" alt="Image" src="https://github.com/user-attachments/assets/98309d72-cdc4-4aae-a1ea-22a9373ce9be" />
-<img width="1393" height="1322" alt="Image" src="https://github.com/user-attachments/assets/06d12172-e671-4e...
+> 1. Using a screen reader, use `ctrlCmd+alt+.` in the chat input to toggle between chat models
+2. 🐛 there's no announcement indicating which mode has been entered
 
 **microsoft/vscode #250415** — mcpr quick access as wrong title
 
@@ -38,57 +36,56 @@ Opened the image carousel from a chat, but it doesn't always have a title in the
 * the `mcpr` entry has a title saying "Add Server"
 <img width="762" alt="Image" src="https://github.com/user-attachments/assets/70e263f7-02d8-4936-b4bb-190dd30c04f7" />
 
-**microsoft/vscode #254880** — Undoing with a `Try again` action in the history doesn't make it dissapear
+**microsoft/vscode #249492** — VS Code Speech shows modal dialog after cancelling
 
 - Actual: **7.7h** (7.7h, bucket: < 1 day)
 - Predicted: **1.4d** (33.9h, bucket: 1-3 days)
 - Error: 1.1d (341% off)
 - Files changed: 1
 
-> At some point the agent failed to edit further
-<img width="404" height="623" alt="Image" src="https://github.com/user-attachments/assets/0da3b2ad-2f26-48ee-aee2-0ba2ae979464" />
-If I clicked Undo a few times, that error message staying in the chat:
-<img width="553" height="498" alt="Image" src="https://github.com/user-attachments/assets/cb8fc15c-982c-44bb-935c-f102d8893c85" />
+> 1. Without speech installed, click the microphone button in the chat input
+2. Hit esc on the modal dialog to install the speech extension
+3. :bug: another modal appears:
+<img width="305" alt="Image" src="https://github.com/user-attachments/assets/3bf2c22c-487f-4f13-89b3-01246495d808" />
 
 ### Worst 3 predictions (least accurate)
 
-**kubernetes/kubernetes #10803** — Unclean container garbage collection
+**facebook/react #28924** — Changelog for 18.3 is missing
 
 - Actual: **1.9h** (1.9h, bucket: < 1 day)
 - Predicted: **7.8d** (186.1h, bucket: 1-4 weeks)
 - Error: 7.7d (9479% off)
 - Files changed: 1
 
-> I'm conducting PoC about distributed build using Kubernetes.
-Jenkins master distribute jenkins slave pods through Kubernetes API Server.
-When build is done, jenkins slave pod is also deleted by kubernetes API Server.
-But, kubernetes didn't delete container. (Pod is deleted well)
-After searching, I found kubelet’s containerGC option.
-So, I adjusted below options to kubelet.
---minimum-container-ttl-...
+> <!--
+  Please provide a clear and concise description of what the bug is. Include
+  screenshots if needed. Please test using the latest version of the relevant
+  React packages to make sure your issue has not already been fixed.
+-->
+React version: 18.3
+## Steps To Reproduce
+1. Check the Releases section on this repo, the `CHANGELOG.md` file, or click on "Release notes" at the end of the second not...
 
-**facebook/react #6797** — Move instrumentation from isomorphic to renderers/shared
+**facebook/react #1120** — warning code shows up in min build
 
 - Actual: **2.8h** (2.8h, bucket: < 1 day)
 - Predicted: **9.7d** (232.6h, bucket: 1-4 weeks)
 - Error: 9.6d (8155% off)
-- Files changed: 13
+- Files changed: 4
 
-> Per @sebmarkbage, we want `isomorphic` folder to only contain the code necessary to author React components. It should not have dependencies on `ReactInstrumentation`, `ReactDebugTool`, and `devtools/*` friends, which themselves should be moved to `renderers/shared/`.
-The only caller we to `ReactInstrumentation` we have right now in that folder is [`onSetState()`](https://github.com/facebook/react...
+> See http://fb.me/react-0.9.0-rc1.min.js and search for `"Invalid`. We should either (a) change warning's implementation to warn only in `__DEV__` and strip it in the build step or (b) change the callers to check `__DEV__`.
+@cpojer?
 
-**microsoft/vscode #246095** — Leaked disposable in `KeybindingsEditor.createHeader`
+**microsoft/vscode #239939** — Terminal: Split action is missing
 
 - Actual: **1.3h** (1.3h, bucket: < 1 day)
 - Predicted: **4.3d** (103.3h, bucket: 3-7 days)
 - Error: 4.2d (7816% off)
 - Files changed: 1
 
-> ```
-[71755:0409/135558.118655:INFO:CONSOLE(23)] "[LEAKED DISPOSABLE] Error: CREATED via:
-    at GCBasedDisposableTracker.trackDisposable (vscode-file://vscode-app/Users/bpasero/Development/Microsoft/vscode/out/vs/base/common/lifecycle.js:27:23)
-    at trackDisposable (vscode-file://vscode-app/Users/bpasero/Development/Microsoft/vscode/out/vs/base/common/lifecycle.js:198:24)
-    at new Disposable (...
+> I no longer see the split terminal icon :thinking_face: even though right clicking the actions tells me it should be visible
+![Image](https://github.com/user-attachments/assets/13727b7b-c45f-4fb3-b224-38826ab6f45f)
+![Image](https://github.com/user-attachments/assets/b789d121-ba52-499e-9d07-9ec6699bc08e)
 
 ---
 
@@ -98,76 +95,107 @@ The only caller we to `ReactInstrumentation` we have right now in that folder is
 
 ### Best 3 predictions (most accurate)
 
-**microsoft/vscode #247672** — Chat: Add consistent icon order across modes
+**microsoft/vscode #242583** — Treesitter makes window stop responding when chat emits codeblocks
 
 - Actual: **18.2h** (18.2h, bucket: 1 day)
 - Predicted: **20.0h** (20.0h, bucket: 1 day)
 - Error: 1.8h (10% off)
-- Files changed: 1
+- Files changed: 3
 
-> <!-- ⚠️⚠️ Do Not Delete This! feature_request_template ⚠️⚠️ -->
-<!-- Please read our Rules of Conduct: https://opensource.microsoft.com/codeofconduct/ -->
-<!-- Please search existing issues to avoid creating duplicates. -->
-While testing https://github.com/microsoft/vscode/issues/247399, I noticed that there's an inconsistent order of icons when switching between modes.
-Namely, the voice chat icon...
+> - Enable `editor.experimental.preferTreeSitter.typescript`
+- Ask Copilot Chat "give a typescript example"
+- Window stops responding for a bit
 
-**microsoft/vscode #250424** — Commands in warning hover are heavily truncated
+**microsoft/vscode #239481** — Comment is getting added randomly when pressing enter on a line where a URI is defined
 
 - Actual: **23.4h** (23.4h, bucket: 1 day)
 - Predicted: **1.3d** (30.1h, bucket: 1-3 days)
 - Error: 6.7h (29% off)
-- Files changed: 1
+- Files changed: 2
 
-> Testing #249660
-<img width="537" alt="Image" src="https://github.com/user-attachments/assets/606ee26f-31bf-4980-9e5f-0ce593ba0ef5" />
+> ![Image](https://github.com/user-attachments/assets/a3bc4dbc-ef97-414e-89f8-3a7775abd33e)
+Repro line:
+```ts
+			validResources = [
+				URI.parse('file:///c:/test'),
+				URI.parse('file:///test')];
+```
+Apparently onEnter rules are a simple regex and the `//` in `file:///` is throwing it off.
 
-**microsoft/vscode #260160** — Terminal suggest: git cherry-pick flags aren't supported
+**kubernetes/kubernetes #137393** — [Flaky test][sig-apps]ReplicaSet Replicaset should have a working scale subresource [Conformance]
 
 - Actual: **12.8h** (12.8h, bucket: 1 day)
 - Predicted: **1.0d** (24.0h, bucket: 1-3 days)
 - Error: 11.3h (88% off)
-- Files changed: 5
+- Files changed: 1
 
-> <img width="798" height="84" alt="Image" src="https://github.com/user-attachments/assets/8a67a59b-3600-4e3a-a652-323c6e22e38b" />
+> ### Which jobs are flaking?
+* sig-release-master-informing
+* kind-master-beta-enabled-conformance
+### Which tests are flaking?
+* [Kubernetes e2e suite.[It] [sig-apps] ReplicaSet Replicaset should have a working scale subresource [Conformance]](https://prow.k8s.io/view/gs/kubernetes-ci-logs/logs/ci-kubernetes-e2e-kind-beta-enabled-conformance/2029013345452953600)
+### Since when has it been flaking?...
 
 ### Worst 3 predictions (least accurate)
 
-**microsoft/vscode #259872** — Investigate issues with `subst` workaround
+**kubernetes/kubernetes #135145** — ValidatingAdmissionPolicies that use a CRD with a property of type=object and additionalProperties=true in matchConstraints crash kube-controller-manager
 
 - Actual: **13.4h** (13.4h, bucket: 1 day)
 - Predicted: **3.6w** (607.1h, bucket: 1-4 weeks)
 - Error: 3.5w (4423% off)
-- Files changed: 2
+- Files changed: 3
 
-> If you start VS Code from subst drive, then VS Code will show wrong content for root of that drive:
-<img width="1366" height="720" alt="image" src="https://github.com/user-attachments/assets/6715a25d-dfb5-47c2-9bbb-d87df5bd55c5" />
-<img width="1366" height="720" alt="image" src="https://github.com/user-attachments/assets/226a0b9b-a897-493d-9059-614c43a3c253" />
-As you can see, instead of showing c...
+> ### What happened?
+A CRD that includes an object property defined as `type: object` and `additionalProperties: true` is used in a `ValidatingAdmissionPolicy` in the `matchConstraints` field.
+As soon as the `ValidatingAdmissionPolicy` is created, the `validatingadmissionpolicystatus` controller in `kube-controller-manager` does type-checking on the resource specified in the `matchConstraints` field...
 
-**microsoft/vscode #264515** — Double click in empty Chat Sessions list should add new session
+**rust-lang/rust #152331** — [ICE]: `arg len already exists`
 
 - Actual: **10.2h** (10.2h, bucket: 1 day)
 - Predicted: **13.7d** (328.6h, bucket: 1-4 weeks)
 - Error: 13.3d (3110% off)
-- Files changed: 2
+- Files changed: 3
 
-> Double click in empty Explorer area creates a new empty file (same effect as +)
-Same pattern should be followed for all views in the Chat Sessions view container. E.g. clicking on an empty space in Claude Code should just create a new claude code session.
-fyi @jo-oikawa @roblourens
+> <!--
+[31mICE[0m: Rustc ./a.rs '' 'thread 'rustc' ($TID) panicked at compiler/rustc_errors/src/diagnostic.rs:359:9: 'arg len already exists'', 'thread 'rustc' ($TID) panicked at compiler/rustc_errors/src/diagnostic.rs:359:9: 'arg len already exists''
+File: /tmp/im/2/a.rs
+-->
+auto-reduced (treereduce-rust):
+````rust
+fn main() {
+    h2(|_: (), _: (), _: (), x: &_| {});
+}
+fn h2<F>(_: F)
+where
+    F:...
 
-**kubernetes/kubernetes #130719** — Replace all deprecated sets.String with sets.Set from directories managed by in sig/node
+**microsoft/vscode #252907** — User mcp.json should follow standard mcp.json schema
 
 - Actual: **8.5h** (8.5h, bucket: 1 day)
 - Predicted: **11.0d** (264.5h, bucket: 1-4 weeks)
 - Error: 10.7d (2996% off)
-- Files changed: 2
+- Files changed: 9
 
-> In this PR https://github.com/kubernetes/kubernetes/pull/112377, sets.Set is newly implemented, and sets.String got marked as deprecated.
-In the files managed by sig/node, there are some `sets.String`. This issue aimas to replace all sets.String with sets.Set in the sig/node area.
-ref: https://github.com/kubernetes/kubernetes/issues/113709
-/kind cleanup
-/sig node
-- [x] pkg/controller/nodelifecycle...
+> Currently servers in User MCP.json are in the form
+```
+{
+	"servers": {
+		"github": {
+			"id": "github",
+			"name": "github",
+			"version": "0.0.1",
+			"config": {
+				"command": "docker",
+				"args": [
+					"run",
+					"-i",
+					"--rm",
+					"-e",
+					"GITHUB_PERSONAL_ACCESS_TOKEN",
+					"ghcr.io/github/github-mcp-server"
+				],
+				"env": {
+					"GITHUB_PERSONAL_ACCESS_TOKEN": "${input:github_t...
 
 ---
 
@@ -177,110 +205,91 @@ ref: https://github.com/kubernetes/kubernetes/issues/113709
 
 ### Best 3 predictions (most accurate)
 
-**facebook/react #5054** — Incorrect react-dom package on bower?
+**microsoft/vscode #291089** — In agent session window, layout falls over when opening editors
 
 - Actual: **1.4d** (34.7h, bucket: 1-3 days)
 - Predicted: **1.5d** (34.8h, bucket: 1-3 days)
 - Error: 5 min (0% off)
-- Files changed: 3
+- Files changed: 2
 
-> I tried doing the following to pick up react-dom: `bower install react-dom#0.14.0-rc1 --save`
-However, it said that the only version available was `0.1.0`
-Poking around on Github yielded a repo called [react-dom](https://github.com/EtienneLem/react-dom) that appears to be linked to Bower. I'm guessing this isn't the right library; what's the dependency installation story going to look like with Bo...
+> Testing #290241
+1. Open agent session window
+2. Run "Help: Welcome" command or "Show settings editor"
+🐛 => this just pops my terminal (which is aligned to Justify)
 
-**kubernetes/kubernetes #137074** — Update HPA e2e DynamicResourceConsumer to use current APIs
+**microsoft/vscode #291154** — Tools disabled by when clause show up in picker
 
 - Actual: **2.7d** (64.4h, bucket: 1-3 days)
 - Predicted: **2.7d** (65.3h, bucket: 1-3 days)
 - Error: 50 min (1% off)
-- Files changed: 3
+- Files changed: 4
 
-> In the HPA e2e tests, the NewDynamicResourceConsumer utility function is responsible for creating several Kubernetes objects. However, these objects are currently created using deprecated/legacy API versions:
-https://github.com/kubernetes/kubernetes/blob/2fb84cfed3e0da83eec85dcc97d14db9b06915c9/test/e2e/framework/autoscaling/autoscaling_utils.go#L90-L98
-We should update this implementation to use...
+> The search subagent should be hidden in VS Code when its setting is disabled, not just disabled in the agent's list at runtime. Do this by using a  `when` clause on the tool contribution in package.json
+cc @24anisha can you take care of this?
 
-**microsoft/vscode #245718** — array string replacements as source no longer works in launch.json
+**microsoft/TypeScript #51875** — Unexpected excess property error with intersection of index signatures
 
 - Actual: **2.9d** (69.6h, bucket: 1-3 days)
 - Predicted: **3.0d** (71.8h, bucket: 1-3 days)
 - Error: 2.2h (3% off)
-- Files changed: 2
+- Files changed: 6
 
-> Type: <b>Bug</b>
-In settings json, declare an array setting
-```json
-{
-    "buildPaths": [
-        "C:\\pathone",
-        "C:\\pathtwo",
-        "C:\\paththree"
-    ]
-}
-```
-Then in launch.json, declare 
-```json
-        "options": {
-                "env": {
-                    "BUILD_EXE": "${config:buildPaths}"
-                }
-            }
-```
-Instead of an array of paths being set to BUILD_EXE,...
+> # Bug Report
+### 🔎 Search Terms
+index signature, intersection, excess property checking
+### 🕗 Version & Regression Information
+- This changed between versions 4.8.0-dev.20220613 and 4.8.0-dev.20220614
+### ⏯ Playground Link
+[Playground link with relevant code](https://www.typescriptlang.org/play?target=9#code/DYUwLgBAHgXBDeEDaBrOBnMAnAlgOwHMBdORAQzgAYIBfWiAMgWTQk10JOYCMr6aA3ACghUCAF5mAT1IQKESgBoIvB...
 
 ### Worst 3 predictions (least accurate)
 
-**microsoft/vscode #297689** — 'Open Chat Customizations' button is too much
+**kubernetes/kubernetes #128442** — Allow ConcurrentDaemonSetSyncs to be set for kube-controller-manager
 
 - Actual: **1.4d** (32.5h, bucket: 1-3 days)
 - Predicted: **3.2w** (542.8h, bucket: 1-4 weeks)
 - Error: 3.0w (1573% off)
-- Files changed: 13
+- Files changed: 2
 
-> Whenever instructions/skill/agent file open in an editor, the button 'Open Chat Customizations` shows up.
-<img width="931" height="539" alt="Image" src="https://github.com/user-attachments/assets/e7f5dcd5-595c-43b8-bc9d-b9a4656925fb" />
-I think its too much and should be removed
-- It's not an action that I would typically invoke when editing in a prompt file
-- It looks lost
+> ### What would you like to be added?
+A possibility to configure the number of worker threads used in the DaemonSet controller at runtime. A relevant configuration option exists in the code but it is not exposed as a CLI flag right now.
+### Why is this needed?
+Currently, DaemonSet controller has 2 worker threads and this number is a [hardcoded value](https://github.com/kubernetes/kubernetes/blob/da...
 
-**kubernetes/kubernetes #136347** — Post merge PR is failing: post-kubernetes-push-e2e-node-perf-tf-wide-deep-test-images
+**rust-lang/rust #151024** — ICE `const array must have an array type`
 
 - Actual: **1.4d** (34.2h, bucket: 1-3 days)
 - Predicted: **2.6w** (429.4h, bucket: 1-4 weeks)
 - Error: 2.4w (1155% off)
-- Files changed: 2
+- Files changed: 3
 
-> Hoisting comment from @mkumatag in https://github.com/kubernetes/kubernetes/pull/134822#issuecomment-3449397895
-the CI job is *STILL* failing https://storage.googleapis.com/kubernetes-ci-logs/logs/post-kubernetes-push-e2e-node-perf-tf-wide-deep-test-images/2011957382287986688/build-log.txt (cc @humblec - context - https://github.com/kubernetes/kubernetes/pull/134822)
-Post merge PR is failing:
-```...
+> <!--
+[31mICE[0m: Rustc ./9C580B1C4A0AB31A282DB97B037889E522D67BEC8F0FE359106BF2A788D485B5.rs '' 'error: internal compiler error: const array must have an array type', 'error: internal compiler error: const array must have an array type'
+File: /tmp/im/9C580B1C4A0AB31A282DB97B037889E522D67BEC8F0FE359106BF2A788D485B5.rs
+-->
+auto-reduced (treereduce-rust):
+````rust
+#![feature(min_generic_const_args)...
 
-**kubernetes/kubernetes #134167** — MAP duplicate env parse error
+**kubernetes/kubernetes #131512** — spec.jobTemplate.spec.podFailurePolicy.rules[0].onPodConditions[0].status: Required value: valid values: ["False" "True" "Unknown"]
 
 - Actual: **1.1d** (26.6h, bucket: 1-3 days)
 - Predicted: **13.6d** (325.7h, bucket: 1-4 weeks)
 - Error: 12.5d (1124% off)
-- Files changed: 2
+- Files changed: 3
 
 > ### What happened?
-The following pod gets rejected by MAP in kubernetes 1.33
+When I try to apply (patching) an existing `CronJob` with the following `podFailurePolicy`:
 ```
-apiVersion: v1
-kind: Pod
-metadata:
-  name: hello-world
-spec:
-  containers:
-  - name: hello-world-container
-    image: nginx:latest
-    ports:
-    - containerPort: 80
-    env:
-    - name: test
-      value: a
-    - name: test
-      value: b
+      podFailurePolicy:
+        rules:
+        - action: Ignore
+          onPodConditions:
+          - type: DisruptionTarget
 ```
-The pods "hello-world" is invalid: : policy 'seccomp-profile-default' with b...
+I'm getting the following Error:
+```
+error when patching "/dev/shm/2794561279": CronJob.batch "mycronjob" is invalid: spec.jobTemplate.spec.podFailurePolic...
 
 ---
 
@@ -290,81 +299,98 @@ The pods "hello-world" is invalid: : policy 'seccomp-profile-default' with b...
 
 ### Best 3 predictions (most accurate)
 
-**microsoft/vscode #286098** — Agent sessions - back button in the title feedback
+**kubernetes/kubernetes #134299** — [Flaking Test] UT k8s.io/kubernetes/pkg/controller: podautoscaler
 
 - Actual: **6.2d** (149.9h, bucket: 3-7 days)
 - Predicted: **6.3d** (151.3h, bucket: 3-7 days)
 - Error: 1.4h (1% off)
-- Files changed: 3
+- Files changed: 6
 
-> Testing #285958
-Back button makes sense when the session is opened in the panel:
-<img width="428" height="179" alt="Image" src="https://github.com/user-attachments/assets/d20ab27b-d7a1-4f66-bc2d-8e8b113585f7" />
-When a session is opened to the side, it just clears the side area so it does not make much sense there:
-<img width="684" height="171" alt="Image" src="https://github.com/user-attachments/...
+> ### Which jobs are flaking?
+https://prow.k8s.io/view/gs/kubernetes-ci-logs/logs/ci-kubernetes-unit/1970799070624616448
+https://prow.k8s.io/view/gs/kubernetes-ci-logs/logs/ci-kubernetes-unit/1970966677315129344
+https://prow.k8s.io/view/gs/kubernetes-ci-logs/logs/ci-kubernetes-unit/1971179330184679424
+https://prow.k8s.io/view/gs/kubernetes-ci-logs/logs/ci-kubernetes-unit/1971254828386488320
+https://...
 
-**kubernetes/kubernetes #136628** — Let DRA drivers specify the order in which devices are considered during scheduling
+**rust-lang/rust #148144** — "Struct is never constructed" false positive (dead_code)
 
 - Actual: **4.6d** (109.6h, bucket: 3-7 days)
 - Predicted: **4.6d** (110.7h, bucket: 3-7 days)
 - Error: 1.1h (1% off)
-- Files changed: 10
+- Files changed: 2
 
-> ### What would you like to be added?
-Currently the order in which the DRA allocator considers devices during scheduling is non-deterministic. Since the DRA allocator uses a first-fit algorithm, the order in which devices are considered can impact both the time required to schedule pods and which devices are selected.
-We want to let DRA drivers specify the order in which the allocator will consider...
+> ### Code
+```Shell
+git clone https://salsa.debian.org/dgit-team/tag2upload-service-manager.git -b 2025-10-26-unused-false-positive
+# commitid a52ede5c5ed44708c53e509ba26cfa8cd1c5eaee
+cd tag2upload-service-manager/
+env -u http_proxy cargo +stable test --locked --all-features --all-targets --workspace -- t_comprehensive
+# Note, there will be a *great deal* of output; you'll maybe want:
+env -u http_pr...
 
-**microsoft/vscode #254893** — Terminal Persistence detach/attach should support basic reconnection
+**microsoft/vscode #308745** — NES: Replace chatResponseFailure polling with stream-level error propagation in XtabProvider
 
 - Actual: **4.2d** (100.7h, bucket: 3-7 days)
 - Predicted: **4.3d** (102.1h, bucket: 3-7 days)
 - Error: 1.4h (1% off)
-- Files changed: 1
+- Files changed: 7
 
-> https://dev.azure.com/monacotools/Monaco/_build/results?buildId=348219&view=logs&j=45e2b0b5-0069-506f-d663-629b6db3a5d5&t=7cde2c7d-5236-5b41-5514-673b49f2139d&l=178
-```
-1) VSCode Smoke Tests (Electron)
-       Terminal
-         Terminal Persistence
-           detach/attach
-             should support basic reconnection:
-     Error: Timeout: get elements '.tabs-list .monaco-list-row' after 20 second...
+> ## Problem
+\`chatResponseFailure\` is a mutable \`let\` variable set asynchronously via \`fetchResultPromise.then()\` and read via a \`getFetchFailure()\` closure scattered across multiple \`await\`/\`yield\` points in \`_streamEditsImpl\`. Every new async suspension point requires the developer to remember to add a \`getFetchFailure()\` check — this polling pattern is fragile and error-prone.
+Cur...
 
 ### Worst 3 predictions (least accurate)
 
-**kubernetes/kubernetes #135621** — DATA RACE garbage collector: blockingDependents
+**microsoft/TypeScript #60985** — `lib.d.ts` Updates for TypeScript 5.8
 
 - Actual: **5.9d** (142.0h, bucket: 3-7 days)
 - Predicted: **5.4w** (910.3h, bucket: > 4 weeks)
 - Error: 4.6w (541% off)
-- Files changed: 7
+- Files changed: 9
 
-> ### What happened?
-kube-controller-manager compiled with -race and tested with various E2E tests in a kind cluster [led to](https://prow.k8s.io/view/gs/kubernetes-ci-logs/pr-logs/pull/133844/pull-kubernetes-e2e-kind-alpha-beta-features-race/1996896534980988928):
+> Including
+* https://github.com/microsoft/TSJS-lib-generator/
+* Outstanding `lib.d.ts` PRs to TS
 
-#### kube-system/kube-controller-manager-kind-control-plane/kube-controller-manager
-  
-      Read at 0x00c004c37cf8 by goroutine 2258:...
-
-**microsoft/vscode #302993** — Sessions: The session filter displays two `Local` session types
+**microsoft/TypeScript #49001** — Missing properties quickfix does not add missing imports
 
 - Actual: **3.1d** (74.0h, bucket: 3-7 days)
 - Predicted: **2.1w** (353.8h, bucket: 1-4 weeks)
 - Error: 11.7d (378% off)
-- Files changed: 1
+- Files changed: 2
 
-> If you click the filter icon in the sessions list, you'll see two `Local` options. The top one appears to be the `Local` sessions in VS Code, and the second one appears to be "Copilot CLI". That said, we should probably hide the former and rename the later? That way we have three options: Copilot CLI, Claude, and Cloud? That would match the terminology and VS Code and be more direct with what thes...
+> # Bug Report
+<!--
+  Please fill in each section completely. Thank you!
+-->
+### 🔎 Search Terms
+quickfix missing properties imports
+### 🕗 Version & Regression Information
+The quickfix was added in https://github.com/microsoft/TypeScript/pull/44576 (cc @a-tarasyuk @komyg) but it doesn't appear to add missing imports.
+### 💻 Code
+<!-- Please post the relevant code sample here as well-->
+```ts
+// foo.ts...
 
-**microsoft/vscode #244570** — `observableInternal`: Cannot read properties of null (reading 'push')
+**rust-lang/rust #142948** — `{UnsafeCell,Cell}::from_mut` on `&mut [T; 0]` then unsize-coerced in consteval reports UB in safe code
 
 - Actual: **3.9d** (94.1h, bucket: 3-7 days)
 - Predicted: **2.3w** (379.8h, bucket: 1-4 weeks)
 - Error: 11.9d (304% off)
-- Files changed: 1
+- Files changed: 321
 
-> Cannot read properties of null (reading 'push'): TypeError: Cannot read properties of null (reading 'push')
-at [vs/base/common/observableInternal/base.ts:407:27](https://github.com/microsoft/vscode/blob/b47e1fee9e4034b5a569d54f7765e4133bd3f7ed/src/vs/base/common/observableInternal/base.ts#L407)
-at [vs/base/common/observableInternal/base.ts:489:7](https://github.com/microsoft/vscode/blob/b47e1fee9e...
+> This code makes the compiler report undefined behavior in safe code during consteval.
+```rust
+use std::cell::UnsafeCell;
+const X: &mut UnsafeCell<[i32]> = UnsafeCell::from_mut(&mut []);
+```
+```
+error[E0080]: constructing invalid value at .<deref>: encountered `UnsafeCell` in read-only memory
+ --> src/lib.rs:2:1
+  |
+2 | const X: &mut UnsafeCell<[i32]> = UnsafeCell::from_mut(&mut []);
+  | ^^^^^^^^^^...
 
 ---
 
@@ -374,94 +400,122 @@ at [vs/base/common/observableInternal/base.ts:489:7](https://github.com/microsof
 
 ### Best 3 predictions (most accurate)
 
-**facebook/react #2880** — Cannot load example
+**rust-lang/rust #146163** — Miscomputation error on nightly starting with 2025-08-11
 
 - Actual: **7.7d** (185.9h, bucket: 1-4 weeks)
 - Predicted: **7.8d** (186.3h, bucket: 1-4 weeks)
 - Error: 26 min (0% off)
 - Files changed: 1
 
-> When I run the index.html in examples jquery-mobile in the chromium browser, I get:
- Uncaught TypeError: Cannot read property '__reactAutoBindMap' of undefinedreact.js:5776 Constructorapp.js:182 (anonymous function)
+> This is a miscomputation error inside an implementation of a cryptographic algorithm (I am on an `aarch64-apple-darwin` and have not checked other targets) .
+https://github.com/RustCrypto/password-hashes/tree/master/yescrypt
+The source code in question, the `yescrypt` crate, has been mechanically translated from C (using corrode), contains ample usage of `unsafe` and is not idiomatic Rust (somethi...
 
-**kubernetes/kubernetes #135145** — ValidatingAdmissionPolicies that use a CRD with a property of type=object and additionalProperties=true in matchConstraints crash kube-controller-manager
+**rust-lang/rust #149412** — Ambiguous glob import of `main` errors even in library crate
 
 - Actual: **14.0d** (334.9h, bucket: 1-4 weeks)
 - Predicted: **14.0d** (335.7h, bucket: 1-4 weeks)
 - Error: 49 min (0% off)
-- Files changed: 3
+- Files changed: 115
 
-> ### What happened?
-A CRD that includes an object property defined as `type: object` and `additionalProperties: true` is used in a `ValidatingAdmissionPolicy` in the `matchConstraints` field.
-As soon as the `ValidatingAdmissionPolicy` is created, the `validatingadmissionpolicystatus` controller in `kube-controller-manager` does type-checking on the resource specified in the `matchConstraints` field...
+> I compiled the following code with `rustc --crate-type=lib repro.rs`
+```rust
+mod a {
+    pub fn main() {}
+}
+mod b {
+    pub fn main() {}
+}
+use a::*;
+use b::*;
+```
+I expected the code to compile, but instead I got the following error:
+```
+error[E0659]: `main` is ambiguous
+  |
+  = note: ambiguous because of multiple glob imports of a name in the same module
+note: `main` could refer to the function i...
 
-**kubernetes/kubernetes #24089** — kubectl validation fails when creating a non-v1 object in a v1 list
+**microsoft/TypeScript #56699** — [Formatting] Missing space after `implements` / `extends` generic 
 
 - Actual: **8.9d** (213.4h, bucket: 1-4 weeks)
 - Predicted: **9.3d** (222.1h, bucket: 1-4 weeks)
 - Error: 8.8h (4% off)
-- Files changed: 7
+- Files changed: 3
 
-> In other words, you can't create/replace/delete/apply deployments with kubectl if they're in a list.
-Works as expected:
-``` console
-$ cat nginx-rc.yaml
-apiVersion: v1
-kind: List
-items:
-  - apiVersion: v1
-    kind: ReplicationController
-    metadata:
-      name: nginx
-    spec:
-      replicas: 1
-      template:
-        metadata:
-          labels:
-            name: nginx
-        spec:
-          cont...
+> ### 🔎 Search Terms
+- implement
+- format / formatting
+- generic
+### 🕗 Version & Regression Information
+5.4.0-dev.20231205
+Not a regression 
+### ⏯ Playground Link
+_No response_
+### 💻 Code
+```ts
+class Foo implements Array<string>{
+}
+class Bar implements Number{
+}
+```
+
+1. Run format
+### 🙁 Actual behavior
+No space is inserted after `implements Array<string>`. A space is inserted after `implements Numbe...
 
 ### Worst 3 predictions (least accurate)
 
-**kubernetes/kubernetes #135929** — globalmount path may be residual while pod creation-deletion
+**microsoft/TypeScript #55296** — `attachFileToDiagnostics`: Debug Failure crash 
 
 - Actual: **8.0d** (192.8h, bucket: 1-4 weeks)
 - Predicted: **4.0w** (671.3h, bucket: 1-4 weeks)
 - Error: 2.8w (248% off)
-- Files changed: 3
+- Files changed: 7
 
-> ### What happened?
-1. created a pod A
-2. pod A starting `mountDevice` , but at this time, the csi-plugin pod was upgrading, kubelet received `rpc error: code = Unavailable error reading from server: EOF`, marked the volume device  `uncertain`, actually the globalmount was mounted.
-https://github.com/kubernetes/kubernetes/blob/15673d04e30c711a7bb0f0efe6abf4baead1463b/pkg/volume/util/operationexecut...
+> ### 🔎 Search Terms
+Hi TypeScript team,
+In an ongoing effort to secure the JS/TS ecosystem, we integrated the TypeScript project into [Google's OSS-Fuzz project recently](https://github.com/google/oss-fuzz/tree/92cbef824dc66722e3e50eca0069e2461f6d6b91/projects/typescript) with our JS/TS fuzzer [Jazzer.js](https://github.com/CodeIntelligenceTesting/jazzer.js).
+Looking at the reports, it seems we wer...
 
-**microsoft/vscode #282527** — Agent sessions: make sidebar toggle visible even in chats
+**microsoft/TypeScript #48912** — Type definition for `fractionalSecondDigits` in Intl.DateTimeFormatOptions has incorrect `0`.
 
 - Actual: **7.4d** (178.6h, bucket: 1-4 weeks)
 - Predicted: **3.7w** (615.3h, bucket: 1-4 weeks)
 - Error: 2.6w (244% off)
-- Files changed: 5
+- Files changed: 1
 
-> When you are in a chat, we show a title:
-<img width="571" height="440" alt="Image" src="https://github.com/user-attachments/assets/f415fbd4-f9f6-4264-a197-cce8bea5205f" />
-In here the top right should show the sidebar toggle.
-//cc @rebornix
+> # lib Update Request
+<!--
+  Please fill in each section completely. Thank you!
+  Are you here for one of these commonly-requested lib changes?
+    * Object.keys - see https://stackoverflow.com/questions/55012174/
+    * Array methods - see https://github.com/microsoft/TypeScript/issues/36554
+    * parseInt, parseFloat, isFinite, isNaN, etc. - see https://github.com/microsoft/TypeScript/issues/4002...
 
-**microsoft/vscode #278199** — Issue running subagent tool
+**rust-lang/rust #144968** — when a fn is missing a parameter type, the help advice could be improved
 
 - Actual: **9.8d** (235.4h, bucket: 1-4 weeks)
 - Predicted: **3.8w** (635.7h, bucket: 1-4 weeks)
 - Error: 2.4w (170% off)
-- Files changed: 1
+- Files changed: 17
 
-> - Copilot Chat Extension Version: 0.33.1
-- VS Code Version: 1.106.1
-- OS Version: Windows 11 / WSL Ubuntu
-- Feature (e.g. agent/edit/ask mode): agent
-- Selected model (e.g. GPT 4.1, Claude 3.7 Sonnet): Claude Sonnet 4.5
-- Logs: -
-The #runSubagent tool randomly stops working in VS Code Chat. I understand that it is an experimental feature and that it is subject to errors, but I am passing on what i...
+> ### Code
+```Rust
+fn is_even(value) -> bool {
+    value % 2 == 0
+}
+```
+### Current output
+```plaintext
+error: expected one of `:`, `@`, or `|`, found `)`
+ --> src/lib.rs:1:17
+  |
+1 | fn is_even(value) -> bool {
+  |                 ^ expected one of `:`, `@`, or `|`
+  |
+  = note: anonymous parameters are removed in the 2018 edition (see RFC 1685)
+help: if this is a `self` type, give it a parameter n...
 
 ---
 
@@ -471,85 +525,99 @@ The #runSubagent tool randomly stops working in VS Code Chat. I understand that 
 
 ### Best 3 predictions (most accurate)
 
-**microsoft/vscode #244752** — `chat.mcp.enabled` doesn't affect API MCP server
+**microsoft/TypeScript #50099** — `lib.d.ts` Updates for TypeScript 4.9
 
 - Actual: **7.7w** (1292.4h, bucket: > 4 weeks)
 - Predicted: **7.8w** (1315.8h, bucket: > 4 weeks)
 - Error: 23.3h (2% off)
-- Files changed: 1
+- Files changed: 11
 
-> * have an extension that contributes an MCP server config
-* disable `chat.mcp.enabled`
-* the MCP server is still there
+> Including
+* https://github.com/microsoft/TSJS-lib-generator/
+* Outstanding `lib.d.ts` PRs to TS
 
-**kubernetes/kubernetes #135963** — [Flake] test/integration/servicecidr: TestServiceAllocation fails with "range is full"
+**rust-lang/rust #141122** — CopyProp doesn't always respect Tree Borrows
 
 - Actual: **5.0w** (836.5h, bucket: > 4 weeks)
 - Predicted: **4.8w** (805.2h, bucket: > 4 weeks)
 - Error: 1.3d (4% off)
-- Files changed: 2
+- Files changed: 4
 
-> ### Which jobs are flaking?
-ci-kubernetes-integration-master
-### Which tests are flaking?
-k8s.io/kubernetes/test/integration/servicecidr TestServiceAllocation/IP_allocator_only
-### Since when has it been flaking?
-Observed on Dec 28, 2025
-### Testgrid link
-https://testgrid.k8s.io/sig-release-master-blocking#integration-master
-### Reason for failure (if possible)
-The test fails with an IP exhaustion...
+> Reduced example from rustlantis, which is accepted by Miri using Tree Borrows without optimizations enabled:
+```rust
+#![feature(custom_mir, core_intrinsics)]
+#![allow(internal_features)]
+use std::intrinsics::mir::*;
+#[custom_mir(dialect = "runtime")]
+fn main() {
+  mir! {
+    let _1;
+    let _2;
+    let _3;
+    let _4;
+    let _5;
+    let _6;
+    let _7;
+    {
+      _1 = core::ptr::addr_of!(_2);...
 
-**kubernetes/kubernetes #9675** — What storage driver (& kernel & OS) should AWS use?
+**microsoft/TypeScript #48523** — Missing type of ES2022 `Intl.Segmenter`
 
 - Actual: **4.8w** (807.0h, bucket: > 4 weeks)
 - Predicted: **4.3w** (725.0h, bucket: > 4 weeks)
 - Error: 3.4d (10% off)
-- Files changed: 10
+- Files changed: 13
 
-> I have struggled to find a filesystem/kernel for AWS that really works well.
-- GCE uses wheezy with a custom kernel and aufs, but aufs seems like a dead-end: it isn't in the kernel and looks like it never will be AFAICT.  Getting GCE's kernel onto AWS would likely be work, both one-off and ongoing (?).
-- overlayfs seems like the future of aufs, but is only in newer kernels
-- if we're going to use...
+> # lib Update Request
+<!--
+  Please fill in each section completely. Thank you!
+  Are you here for one of these commonly-requested lib changes?
+    * Object.keys - see https://stackoverflow.com/questions/55012174/
+    * Array methods - see https://github.com/microsoft/TypeScript/issues/36554
+    * parseInt, parseFloat, isFinite, isNaN, etc. - see https://github.com/microsoft/TypeScript/issues/4002...
 
 ### Worst 3 predictions (least accurate)
 
-**kubernetes/kubernetes #137269** — Investigate cleaning up cross-group publishing of Options types in openapi v3
+**microsoft/vscode #293002** — Switching to plan mode in a new session disables editing tools for the prior running session
 
 - Actual: **5.2w** (865.4h, bucket: > 4 weeks)
 - Predicted: **14.5h** (14.5h, bucket: 1 day)
 - Error: 5.1w (98% off)
-- Files changed: 36
+- Files changed: 1
 
-> While reviewing https://github.com/kubernetes/kubernetes/pull/137028/files, I noticed that any addition of any group/version results in changes to the openapi v3 published for all other group versions.
-This happens because we cross-register generic metav1 types like DeleteOptions and WatchEvent into all API group/versions, and then publish all registered group/versions for those types into openapi...
+> STR:
+1. Plan a change in an agent session, then move to start implementation
+2. Navigate back to agent sessions and switch to plan mode for a new task, send that
+3.  🐛 First session will have lost edit tools and maybe started showing codeblocks instead
+![Image](https://github.com/user-attachments/assets/86edab94-4b63-48c6-909e-62b5bd4147e1)
 
-**microsoft/vscode #298659** — Hiding other items from on-selection widget leaves a vertical bar
+**microsoft/vscode #233675** — Enter inserts //
 
 - Actual: **12.0w** (2013.7h, bucket: > 4 weeks)
 - Predicted: **1.4d** (34.1h, bucket: 1-3 days)
 - Error: 11.8w (98% off)
-- Files changed: 7
+- Files changed: 2
 
-> repro: 
-1. select code in editor to get the new widget
-<img width="486" height="186" alt="Image" src="https://github.com/user-attachments/assets/285bf061-764e-4b8d-9566-2b202c9540ec" />
-2. hide two items on the left -- :bug: vertical bar left over
-<img width="432" height="184" alt="Image" src="https://github.com/user-attachments/assets/b6015a7f-0d28-42de-8ea0-8ac7eeaa1458" />
-Version: 1.110.0-insi...
+> ![Image](https://github.com/user-attachments/assets/9a265cd1-89a7-4177-b84b-58e50ac9056c)
+```ts
+		const obsWorkspace = new FakedObservableWorkspace();
+		obsWorkspace.addDocument({ 
+			uri: createDocumentUri(URI.parse(`file://test.ts`).toString()), initialValue: '' });
+		const originalTextDoc = new StringValue(
+			);
+		const singleEdit = SingleEdit.insert(11, '3D');
+```
 
-**microsoft/vscode #281643** — Agent sessions: special rendering of PRs and worktrees
+**facebook/react #31717** — [eslint-plugin-react-hooks] v5.1.0 was released without any changes in github
 
 - Actual: **12.4w** (2075.1h, bucket: > 4 weeks)
 - Predicted: **1.7d** (41.5h, bucket: 1-3 days)
 - Error: 12.1w (98% off)
-- Files changed: 6
+- Files changed: 1
 
-> <!-- ⚠️⚠️ Do Not Delete This! feature_request_template ⚠️⚠️ -->
-<!-- Please read our Rules of Conduct: https://opensource.microsoft.com/codeofconduct/ -->
-<!-- Please search existing issues to avoid creating duplicates. -->
-<!-- Describe the feature you'd like. -->
-Ref https://github.com/microsoft/vscode-internalbacklog/issues/6388
-I thought PR links were previously clickable - is that no longer t...
+> The newer version is released https://www.npmjs.com/package/eslint-plugin-react-hooks/v/5.1.0
+However, there aren't any changes in the package dir here as of the time of posting the issue.
+https://github.com/facebook/react/tree/372ec00c0384cd2089651154ea7c67693ee3f2a5/packages/eslint-plugin-react-hooks
+This is concerning because it could indicate that someone published on behalf of the react team.
 
 ---
