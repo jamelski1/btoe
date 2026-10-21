@@ -4,9 +4,10 @@ Replication and extension of the SE3M study (Fávero et al., 2022) for software 
 
 ## Research Questions
 
-- **RQ1**: To what extent do text-derived features predict elapsed issue resolution time relative to a properly computed random baseline?
-- **RQ2**: Does augmenting text features with repository-mined structural features yield a statistically significant improvement over text-only prediction?
-- **RQ3**: Is the resulting prediction accuracy robust to encoder architecture, dimensionality reduction method, post-hoc-feature inclusion, and duration-filter threshold?
+- **RQ1**: To what extent do text-derived features (CodeBERT embeddings of issue title and body, plus surface NLP statistics) predict elapsed issue resolution time relative to a properly computed random baseline?
+- **RQ2**: Does augmenting text features with repository-mined structural features (churn, fan-in/out, change frequency, file age) yield a statistically significant and practically meaningful improvement over text-only prediction?
+- **RQ3**: Is the resulting prediction accuracy robust to encoder architecture, dimensionality-reduction method, post-hoc-feature inclusion, and duration-filter threshold, or does it depend sensitively on any of these design choices?
+- **RQ4**: Does the ceiling hold when a model must generalize to a repository it has never seen (leave-one-repository-out), or does the pooled random split overstate accuracy?
 
 ## Project Structure
 
@@ -91,8 +92,10 @@ pytest tests/test_pipeline_correctness.py -v
 
 - **SA = 34.3%** (Model A, text-only) on 90-day-cap configuration
 - **SA = 34.8%** (Model C, combined) — not significantly better than A (p = 0.332)
+- **SA = 22.9%** (gpt-4o zero-shot) — frontier LLM does not match tuned pipeline
 - **Predictive ceiling at 32.0–34.8% SA** robust across encoders, feature methods, and thresholds
 - Text and repo features are **substitutes, not complements**
+- Models buy only ~2.5% over a constant-median baseline (practical implications discussion)
 
 ## References
 
