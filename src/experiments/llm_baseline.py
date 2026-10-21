@@ -26,11 +26,15 @@ import json
 import logging
 import os
 import re
+import sys
 import time
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+# Allow `python src/experiments/llm_baseline.py` as well as `python -m ...`
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -116,17 +120,26 @@ def compute_metrics(actuals: np.ndarray, predictions: np.ndarray) -> dict:
 
 
 def load_model_a_test_set() -> tuple[list[int], pd.DataFrame] | None:
-    """Load Model A's test indices and return (indices, filtered_df)."""
-    results_path = Path("models/model_a_text_only/results.json")
-    if not results_path.exists():
-        return None
+    """Return (test_indices, filtered_df) for Model A's held-out test split.
 
-    with open(results_path) as f:
-        results = json.load(f)
+    The split is *reproduced* with ``train_test_split(test_size, random_state)``
+    from the config rather than read from results.json.  Older results.json
+    files stored 0..n-1 for train/test_indices (index lost in the trainer's
+    embedding reduction, since fixed), and the first version of this script
+    trusted them, so it scored the first N rows of the dataset instead of the
+    test split.  The reproduced split is verified against the actuals in
+    ``models/model_a_text_only/predictions.csv``; if they do not line up the
+    function returns None rather than silently using the wrong rows.
+    """
+    from sklearn.model_selection import train_test_split
 
-    test_indices = results.get("test_indices")
-    if not test_indices:
-        return None
+    from src.utils.config import load_config
+
+    cfg = load_config()
+    seed = cfg["modeling"]["random_seed"]
+    test_size = cfg["modeling"]["test_size"]
+    min_hours = cfg["filtering"]["min_duration_hours"]
+    max_hours = cfg["filtering"]["max_duration_days"] * 24
 
     # Load and filter raw data the same way training does
     data_dir = Path("data")
@@ -140,10 +153,41 @@ def load_model_a_test_set() -> tuple[list[int], pd.DataFrame] | None:
     else:
         return None
 
-    mask = (df["duration_hours"] >= 1) & (df["duration_hours"] <= 2160)
+    mask = (df["duration_hours"] >= min_hours) & (df["duration_hours"] <= max_hours)
     df = df[mask].reset_index(drop=True)
 
-    return test_indices, df
+    train_indices, test_indices = train_test_split(
+        np.arange(len(df)), test_size=test_size, random_state=seed
+    )
+
+    # Verify against the actuals Model A was scored on (split order).
+    preds_path = Path("models/model_a_text_only/predictions.csv")
+    if not preds_path.exists():
+        logger.warning("models/model_a_text_only/predictions.csv not found; cannot verify split")
+        return None
+    preds = pd.read_csv(preds_path)
+    train_act = preds.loc[preds["split"] == "train", "actual_hours"].to_numpy()
+    test_act = preds.loc[preds["split"] == "test", "actual_hours"].to_numpy()
+    y = df["duration_hours"].to_numpy()
+    if (len(test_act) != len(test_indices)
+            or not np.allclose(y[train_indices], train_act)
+            or not np.allclose(y[test_indices], test_act)):
+        logger.error("Reproduced split does not match Model A's predictions.csv actuals; "
+                     "re-train Model A or check data/raw")
+        return None
+
+    # Cross-check stored indices, warn if results.json is stale
+    results_path = Path("models/model_a_text_only/results.json")
+    if results_path.exists():
+        with open(results_path) as f:
+            stored = json.load(f).get("test_indices")
+        if stored is not None and not np.array_equal(np.asarray(stored), test_indices):
+            logger.warning("results.json test_indices differ from the reproduced split "
+                           "(stale file from before the index fix); using the reproduced split")
+
+    logger.info(f"Model A test split reproduced and verified: {len(test_indices)} test / "
+                f"{len(train_indices)} train (seed={seed}, test_size={test_size})")
+    return test_indices.tolist(), df
 
 
 def main():
@@ -224,9 +268,13 @@ def main():
         issue_num = row.get("issue_number", "?")
         key = f"{repo}#{issue_num}"
 
-        # Skip if already completed (resume support)
+        # Skip if already completed (resume support). Refresh the actual
+        # duration from the current dataset in case it was re-cleaned since
+        # the earlier run; the LLM prediction itself only depends on text.
         if key in completed:
-            results.append(completed[key])
+            row_done = dict(completed[key])
+            row_done["actual_hours"] = actual
+            results.append(row_done)
             continue
 
         logger.info(f"  [{i+1}/{len(sample)}] {key} (actual: {actual:.1f}h)")
