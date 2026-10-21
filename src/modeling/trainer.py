@@ -96,9 +96,10 @@ class ModelTrainer:
 
         # Build new feature DataFrame
         pca_cols = [f"pca_{i}" for i in range(n_components)]
+        # Keep X.index: train_indices/test_indices are read from it later and
+        # must be positions in the pre-split DataFrame, not 0..n-1.
         pca_df = pd.DataFrame(emb_reduced, index=X.index, columns=pca_cols)
-        other_df = X[other_cols].reset_index(drop=True)
-        pca_df = pca_df.reset_index(drop=True)
+        other_df = X[other_cols]
 
         X_reduced = pd.concat([pca_df, other_df], axis=1)
         logger.info(f"  Final feature set: {len(pca_cols)} PCA + {len(other_cols)} derived = {X_reduced.shape[1]} features")
@@ -117,9 +118,10 @@ class ModelTrainer:
         emb_reduced = pca.transform(emb_scaled)
 
         pca_cols = [f"pca_{i}" for i in range(emb_reduced.shape[1])]
+        # Keep X.index: train_indices/test_indices are read from it later and
+        # must be positions in the pre-split DataFrame, not 0..n-1.
         pca_df = pd.DataFrame(emb_reduced, index=X.index, columns=pca_cols)
-        other_df = X[other_cols].reset_index(drop=True)
-        pca_df = pca_df.reset_index(drop=True)
+        other_df = X[other_cols]
 
         return pd.concat([pca_df, other_df], axis=1)
 
@@ -162,8 +164,7 @@ class ModelTrainer:
 
         topk_cols = [f"topk_{emb_cols[i].replace('emb_', '')}" for i in selected_idx]
         topk_df = pd.DataFrame(emb_selected, index=X.index, columns=topk_cols)
-        other_df = X[other_cols].reset_index(drop=True)
-        topk_df = topk_df.reset_index(drop=True)
+        other_df = X[other_cols]  # keep X.index (see reduce_embeddings)
 
         X_selected = pd.concat([topk_df, other_df], axis=1)
         logger.info(f"  Final feature set: {len(topk_cols)} Top-K + {len(other_cols)} derived = {X_selected.shape[1]} features")
@@ -184,8 +185,7 @@ class ModelTrainer:
         selected_idx = selector.get_support(indices=True)
         topk_cols = [f"topk_{emb_cols[i].replace('emb_', '')}" for i in selected_idx]
         topk_df = pd.DataFrame(emb_selected, index=X.index, columns=topk_cols)
-        other_df = X[other_cols].reset_index(drop=True)
-        topk_df = topk_df.reset_index(drop=True)
+        other_df = X[other_cols]  # keep X.index (see reduce_embeddings)
 
         return pd.concat([topk_df, other_df], axis=1)
 
@@ -221,8 +221,7 @@ class ModelTrainer:
 
         pls_cols = [f"pls_{i}" for i in range(n_components)]
         pls_df = pd.DataFrame(emb_pls, index=X.index, columns=pls_cols)
-        other_df = X[other_cols].reset_index(drop=True)
-        pls_df = pls_df.reset_index(drop=True)
+        other_df = X[other_cols]  # keep X.index (see reduce_embeddings)
 
         X_reduced = pd.concat([pls_df, other_df], axis=1)
         logger.info(f"  Final feature set: {len(pls_cols)} PLS + {len(other_cols)} derived = {X_reduced.shape[1]} features")
@@ -242,8 +241,7 @@ class ModelTrainer:
 
         pls_cols = [f"pls_{i}" for i in range(emb_pls.shape[1])]
         pls_df = pd.DataFrame(emb_pls, index=X.index, columns=pls_cols)
-        other_df = X[other_cols].reset_index(drop=True)
-        pls_df = pls_df.reset_index(drop=True)
+        other_df = X[other_cols]  # keep X.index (see reduce_embeddings)
 
         return pd.concat([pls_df, other_df], axis=1)
 
