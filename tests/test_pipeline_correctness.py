@@ -584,3 +584,99 @@ class TestFeatureAlignment:
         assert "train" in splits, "Missing 'train' split in predictions"
         assert "test" in splits, "Missing 'test' split in predictions"
         assert (preds["actual_hours"] > 0).all(), "Found non-positive actuals"
+
+
+# ── Test 9: Index Preservation Through Embedding Reduction ─────────── #
+
+class TestIndexPreservation:
+    """Regression tests for the train/test_indices bug.
+
+    ModelTrainer used to call reset_index(drop=True) inside the embedding
+    reduction helpers.  Because train_and_evaluate() reads
+    ``X_train.index`` / ``X_test.index`` *after* reduction to populate
+    ``train_indices`` / ``test_indices`` in results.json, every model with
+    embedding reduction (A, C, sensitivity_a/c, ...) stored 0..n-1 instead
+    of positions in the pre-split DataFrame.  Downstream SHAP and
+    example-prediction steps then analysed the wrong rows.
+    """
+
+    @staticmethod
+    def _make_features(n_rows=60, n_emb=12, seed=0):
+        rng = np.random.RandomState(seed)
+        X = pd.DataFrame(rng.randn(n_rows, n_emb), columns=[f"emb_{i}" for i in range(n_emb)])
+        X["text_length"] = rng.randint(10, 500, size=n_rows).astype(float)
+        X["word_count"] = rng.randint(2, 100, size=n_rows).astype(float)
+        y = pd.Series(rng.lognormal(3, 1, size=n_rows), name="duration_hours")
+        return X, y
+
+    @pytest.fixture
+    def trainer(self):
+        from src.modeling.trainer import ModelTrainer
+        cfg = load_config()
+        cfg.setdefault("pca", {})["n_components"] = 3
+        cfg.setdefault("topk", {})["k"] = 3
+        cfg.setdefault("pls", {})["n_components"] = 3
+        return ModelTrainer(cfg)
+
+    @pytest.mark.parametrize("method", ["pca", "topk", "pls"])
+    def test_reduction_preserves_split_index(self, trainer, method):
+        """After split + reduction, X_train/X_test must keep pre-split positions."""
+        from sklearn.model_selection import train_test_split
+
+        X, y = self._make_features()
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        expected_train = X_train.index.values.copy()
+        expected_test = X_test.index.values.copy()
+
+        # Sanity: a real split is not a plain 0..n range
+        assert not np.array_equal(expected_test, np.arange(len(expected_test)))
+
+        if method == "pca":
+            X_train_r, scaler, reducer = trainer.reduce_embeddings(X_train)
+            X_test_r = trainer.transform_embeddings(X_test, scaler, reducer)
+        elif method == "topk":
+            X_train_r, scaler, reducer = trainer.select_topk_embeddings(X_train, y_train)
+            X_test_r = trainer.transform_topk_embeddings(X_test, scaler, reducer)
+        else:
+            X_train_r, scaler, reducer = trainer.reduce_embeddings_pls(X_train, np.log1p(y_train))
+            X_test_r = trainer.transform_embeddings_pls(X_test, scaler, reducer)
+
+        assert np.array_equal(X_train_r.index.values, expected_train), \
+            f"{method}: train index was reset; train_indices in results.json would be wrong"
+        assert np.array_equal(X_test_r.index.values, expected_test), \
+            f"{method}: test index was reset; test_indices in results.json would be wrong"
+
+        # Derived (non-embedding) columns must still line up row-for-row
+        pd.testing.assert_series_equal(X_test_r["word_count"], X_test["word_count"])
+        pd.testing.assert_series_equal(X_train_r["text_length"], X_train["text_length"])
+        assert len(X_train_r) == len(X_train) and len(X_test_r) == len(X_test)
+        assert not X_train_r.isna().any().any(), "misaligned concat produced NaNs"
+
+    @pytest.mark.skipif(
+        not __import__("pathlib").Path("models/model_a_text_only/results.json").exists()
+        or not __import__("pathlib").Path("data/raw/issue_pr_pairs.parquet").exists(),
+        reason="Model A results or raw data not available"
+    )
+    def test_saved_model_a_indices_are_real_positions(self):
+        """Stored Model A test_indices must be the seed-42 split, not 0..n-1."""
+        import json
+        from pathlib import Path
+        from sklearn.model_selection import train_test_split
+
+        cfg = load_config()
+        with open(Path("models/model_a_text_only/results.json")) as f:
+            results = json.load(f)
+        test_idx = np.asarray(results["test_indices"])
+        assert not np.array_equal(test_idx, np.arange(len(test_idx))), \
+            "test_indices are a plain 0..n range (index lost in embedding reduction)"
+
+        df = pd.read_parquet("data/raw/issue_pr_pairs.parquet")
+        min_h = cfg["filtering"]["min_duration_hours"]
+        max_h = cfg["filtering"]["max_duration_days"] * 24
+        df = df[(df["duration_hours"] >= min_h) & (df["duration_hours"] <= max_h)].reset_index(drop=True)
+        _, fresh_test = train_test_split(
+            np.arange(len(df)), test_size=cfg["modeling"]["test_size"],
+            random_state=cfg["modeling"]["random_seed"],
+        )
+        assert np.array_equal(test_idx, fresh_test), \
+            "test_indices do not reproduce train_test_split on the filtered data"
