@@ -2,7 +2,7 @@
 
 ## 4.1 Dataset
 
-We mined 4,499 issue-PR pairs from eight actively maintained open-source repositories spanning four distinct organizational sponsors: VS Code and TypeScript (Microsoft), Kubernetes (CNCF), Rust (Rust Foundation), React and PyTorch (Meta), Flutter (Google), and Django (Django Software Foundation). After applying the duration filter (1 hour to 90 days), the final dataset comprised 4,479 pairs. The duration distribution was heavily right-skewed (mean = 374h, median = 146h, std = 492h), motivating the use of a log-transform on the target variable during training. The dataset was split 80/20 into a training set (3,583 samples) and a held-out test set (896 samples), with a fixed random seed (42) for reproducibility.
+We mined 4,499 issue-PR pairs from five actively maintained open-source repositories spanning four distinct organizational sponsors: VS Code and TypeScript (Microsoft), Kubernetes (CNCF), Rust (Rust Foundation), and React (Meta). After applying the duration filter (1 hour to 90 days), the final dataset comprised 4,479 pairs (VS Code: 993; TypeScript: 1,000; Kubernetes: 987; Rust: 1,000; React: 498). The mined data also contained a single golang/go pair, which is included in the totals reported here. The duration distribution was heavily right-skewed (mean = 374h, median = 146h, std = 492h), motivating the use of a log-transform on the target variable during training. The dataset was split 80/20 into a training set (3,583 samples) and a held-out test set (896 samples), with a fixed random seed (42) for reproducibility.
 
 ## 4.2 RQ1: Text-Only Prediction Accuracy
 
